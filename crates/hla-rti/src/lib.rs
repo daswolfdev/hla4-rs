@@ -551,15 +551,11 @@ impl RtiNode {
     }
 
     /// Trigger a graceful shutdown. Accept loops stop pulling new
-    /// connections and the suspended-session janitor exits. `serve` /
-    /// `serve_ws` / `serve_tls` return `Ok(())` once their loops
-    /// observe the cancel.
+    /// connections, per-connection session loops unwind, and the
+    /// suspended-session janitor exits. `serve` / `serve_ws` /
+    /// `serve_tls` return `Ok(())` once their loops observe the cancel.
     ///
-    /// Per-connection reader / writer / heartbeat tasks still unwind
-    /// only on peer EOF or `heartbeat.missing_timeout` — wiring the
-    /// shutdown token into `run_session_loop` is tracked as follow-up
-    /// work (see the `TODO(H4)` at the select! site in
-    /// `run_session_loop`). Idempotent — safe to call concurrently.
+    /// Idempotent — safe to call concurrently.
     pub fn shutdown(&self) {
         tracing::info!("shutdown requested");
         self.shutdown.cancel();
@@ -1075,12 +1071,17 @@ impl RtiNode {
         // Discard the immediate first tick.
         liveness_interval.tick().await;
         loop {
-            // TODO(H4): add a third select! branch on
-            // `node.shutdown.cancelled()` so in-flight sessions unwind
-            // promptly on RTI shutdown rather than waiting for peer EOF
-            // or `heartbeat.missing_timeout`.
             let frame = tokio::select! {
                 biased;
+                // Cooperative shutdown: when the node's shutdown token
+                // fires, every in-flight session unwinds promptly
+                // instead of waiting for peer EOF or the heartbeat
+                // timeout. Cancel-safe because `cancelled()` is a
+                // stable observation, not a stateful consume.
+                () = node.shutdown.cancelled() => {
+                    tracing::info!(session_id, "session loop draining on shutdown");
+                    return Ok(());
+                }
                 _ = liveness_interval.tick() => {
                     if last_inbound.elapsed() > hb_config.missing_timeout {
                         node.metrics.sessions_reaped.fetch_add(1, Ordering::Relaxed);
