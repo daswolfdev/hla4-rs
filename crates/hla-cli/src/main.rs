@@ -26,16 +26,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr: SocketAddr = args.bind.parse()?;
     let node = Arc::new(RtiNode::new(addr));
 
-    // Wire Ctrl-C / SIGTERM to the node's cooperative shutdown token.
-    // Once cancelled, every accept loop, per-connection task, and the
-    // suspended-session janitor unwinds.
+    // Wire Ctrl-C (SIGINT) and SIGTERM to the node's cooperative
+    // shutdown token. SIGTERM is the conventional signal from
+    // systemd / container runtimes (`docker stop`, `kubectl delete`);
+    // ctrl_c maps to SIGINT for interactive use.
     let shutdown_node = Arc::clone(&node);
     tokio::spawn(async move {
-        if let Err(e) = tokio::signal::ctrl_c().await {
-            tracing::warn!(error = %e, "ctrl_c handler failed; shutdown will not be triggered");
-            return;
-        }
-        tracing::info!("ctrl-c received — beginning graceful shutdown");
+        wait_for_shutdown_signal().await;
         shutdown_node.shutdown();
     });
 
@@ -43,4 +40,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     node.run().await?;
     tracing::info!("rtiexec exited cleanly");
     Ok(())
+}
+
+/// Wait for the first SIGINT or SIGTERM and return. On non-Unix targets,
+/// only SIGINT (via `ctrl_c`) is observed.
+async fn wait_for_shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        let mut term = match signal(SignalKind::terminate()) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::warn!(error = %e, "could not install SIGTERM handler; ctrl-c only");
+                let _ = tokio::signal::ctrl_c().await;
+                tracing::info!("SIGINT received — beginning graceful shutdown");
+                return;
+            }
+        };
+        tokio::select! {
+            r = tokio::signal::ctrl_c() => {
+                if let Err(e) = r {
+                    tracing::warn!(error = %e, "ctrl_c handler failed");
+                    return;
+                }
+                tracing::info!("SIGINT received — beginning graceful shutdown");
+            }
+            _ = term.recv() => {
+                tracing::info!("SIGTERM received — beginning graceful shutdown");
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        if let Err(e) = tokio::signal::ctrl_c().await {
+            tracing::warn!(error = %e, "ctrl_c handler failed");
+            return;
+        }
+        tracing::info!("ctrl-c received — beginning graceful shutdown");
+    }
 }

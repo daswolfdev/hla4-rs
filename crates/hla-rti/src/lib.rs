@@ -478,6 +478,22 @@ impl Federation {
     }
 }
 
+/// HLA 4 RTI server node.
+///
+/// # Runtime requirements
+///
+/// `RtiNode` must run on a **multi-thread** Tokio runtime. The save /
+/// restore dispatch path calls `tokio::task::block_in_place` to keep
+/// the worker available during blocking filesystem I/O, which panics
+/// on `current_thread`. Use `#[tokio::main(flavor = "multi_thread")]`
+/// or `#[tokio::test(flavor = "multi_thread")]` accordingly. `rtiexec`
+/// pins this in `crates/hla-cli/src/main.rs`.
+///
+/// # Lifecycle
+///
+/// `bind` → `serve` (or `serve_ws` / `serve_tls`) → `shutdown`. Call
+/// `shutdown` from any thread; accept loops and the suspended-session
+/// janitor unwind cooperatively. See [`Self::shutdown`].
 pub struct RtiNode {
     pub bind_addr: SocketAddr,
     pub federations: RwLock<HashMap<String, Arc<Federation>>>,
@@ -535,11 +551,17 @@ impl RtiNode {
     }
 
     /// Trigger a graceful shutdown. Accept loops stop pulling new
-    /// connections, per-connection reader/writer/heartbeat tasks
-    /// unwind, and the suspended-session janitor exits. `serve` /
+    /// connections and the suspended-session janitor exits. `serve` /
     /// `serve_ws` / `serve_tls` return `Ok(())` once their loops
     /// observe the cancel.
+    ///
+    /// Per-connection reader / writer / heartbeat tasks still unwind
+    /// only on peer EOF or `heartbeat.missing_timeout` — wiring the
+    /// shutdown token into `run_session_loop` is tracked as follow-up
+    /// work (see the `TODO(H4)` at the select! site in
+    /// `run_session_loop`). Idempotent — safe to call concurrently.
     pub fn shutdown(&self) {
+        tracing::info!("shutdown requested");
         self.shutdown.cancel();
     }
 
@@ -1053,6 +1075,10 @@ impl RtiNode {
         // Discard the immediate first tick.
         liveness_interval.tick().await;
         loop {
+            // TODO(H4): add a third select! branch on
+            // `node.shutdown.cancelled()` so in-flight sessions unwind
+            // promptly on RTI shutdown rather than waiting for peer EOF
+            // or `heartbeat.missing_timeout`.
             let frame = tokio::select! {
                 biased;
                 _ = liveness_interval.tick() => {
