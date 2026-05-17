@@ -52,6 +52,10 @@ confidence-threshold = 0.92
 # crate name+version. Re-evaluate after PR 3 / 4.
 multiple-versions = "allow"
 wildcards = "deny"
+# `workspace = true` and `path = ".."` deps look like wildcards to
+# cargo-deny but are intentional — internal crates resolved from the
+# workspace root. Don't fail on those.
+allow-wildcard-paths = true
 # Crates we never want pulled in via any path. Add entries with a reason.
 deny = [
     # Example shape; populate after a `cargo tree` audit:
