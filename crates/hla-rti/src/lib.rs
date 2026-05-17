@@ -550,10 +550,17 @@ impl RtiNode {
         }
     }
 
-    /// Trigger a graceful shutdown. Accept loops stop pulling new
-    /// connections, per-connection session loops unwind, and the
-    /// suspended-session janitor exits. `serve` / `serve_ws` /
-    /// `serve_tls` return `Ok(())` once their loops observe the cancel.
+    /// Trigger a graceful shutdown.
+    ///
+    /// Accept loops stop pulling new connections, per-connection
+    /// session loops begin unwinding, and the suspended-session
+    /// janitor exits. `serve` / `serve_ws` / `serve_tls` return
+    /// `Ok(())` once their accept loop observes the cancel.
+    ///
+    /// Per-session tasks are spawned detached, so `serve().await`
+    /// returning does **not** guarantee they have finished — only
+    /// that they have been signaled. Observe peer-side EOF (or
+    /// metrics) for full quiescence.
     ///
     /// Idempotent — safe to call concurrently.
     pub fn shutdown(&self) {
@@ -1079,7 +1086,9 @@ impl RtiNode {
                 // timeout. Cancel-safe because `cancelled()` is a
                 // stable observation, not a stateful consume.
                 () = node.shutdown.cancelled() => {
-                    tracing::info!(session_id, "session loop draining on shutdown");
+                    // `debug!` rather than `info!` — at scale we don't want
+                    // an info-level line per federate on every shutdown.
+                    tracing::debug!(session_id, "session loop draining on shutdown");
                     return Ok(());
                 }
                 _ = liveness_interval.tick() => {
