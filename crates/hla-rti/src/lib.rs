@@ -435,29 +435,32 @@ pub struct SyncPoint {
 
 #[doc(hidden)] // exposed only via RtiNode::_testing_federation
 pub struct Federation {
-    pub name: String,
-    pub fom: Arc<MergedFom>,
-    pub federates: RwLock<HashMap<FederateHandle, FederateSession>>,
-    pub object_instances: RwLock<HashMap<ObjectInstanceHandle, ObjectInstance>>,
-    pub subscriptions: RwLock<SubscriptionMatrix>,
-    pub time_coordinator: Mutex<TimeCoordinator>,
-    pub sync_points: RwLock<HashMap<String, SyncPoint>>,
+    pub(crate) name: String,
+    pub(crate) fom: Arc<MergedFom>,
+    pub(crate) federates: RwLock<HashMap<FederateHandle, FederateSession>>,
+    pub(crate) object_instances: RwLock<HashMap<ObjectInstanceHandle, ObjectInstance>>,
+    pub(crate) subscriptions: RwLock<SubscriptionMatrix>,
+    // `TimeCoordinator` is a placeholder for the future time-management
+    // implementation; the field is read indirectly via construction only.
+    #[allow(dead_code)]
+    pub(crate) time_coordinator: Mutex<TimeCoordinator>,
+    pub(crate) sync_points: RwLock<HashMap<String, SyncPoint>>,
     /// DDM regions, keyed by RegionHandle.
-    pub regions: RwLock<HashMap<hla_core::RegionHandle, Region>>,
-    pub next_region_id: AtomicU64,
+    pub(crate) regions: RwLock<HashMap<hla_core::RegionHandle, Region>>,
+    pub(crate) next_region_id: AtomicU64,
     /// An in-progress federation save, if any. Only one at a time.
-    pub current_save: RwLock<Option<SaveOperation>>,
+    pub(crate) current_save: RwLock<Option<SaveOperation>>,
     /// An in-progress federation restore, if any. Only one at a time.
-    pub current_restore: RwLock<Option<RestoreOperation>>,
+    pub(crate) current_restore: RwLock<Option<RestoreOperation>>,
     /// Label of the most recent save attempt, used so the persistence
     /// callback can derive the snapshot path after `current_save` is cleared.
-    pub last_save_label: RwLock<Option<String>>,
-    pub next_object_id: AtomicU64,
-    pub next_federate_id: AtomicU32,
+    pub(crate) last_save_label: RwLock<Option<String>>,
+    pub(crate) next_object_id: AtomicU64,
+    pub(crate) next_federate_id: AtomicU32,
 }
 
 impl Federation {
-    pub fn new(name: String, fom: Arc<MergedFom>) -> Self {
+    pub(crate) fn new(name: String, fom: Arc<MergedFom>) -> Self {
         Self {
             name,
             fom,
@@ -474,6 +477,75 @@ impl Federation {
             next_object_id: AtomicU64::new(1),
             next_federate_id: AtomicU32::new(1),
         }
+    }
+
+    // ---- Test introspection ----
+    //
+    // The methods below are gated `#[doc(hidden)]` and named with a leading
+    // underscore (per the `serde` / `cargo` convention) so they are
+    // discoverable to integration tests but not to rustdoc consumers. They
+    // are the only way external code can poke at `Federation`'s state now
+    // that its fields are `pub(crate)`.
+
+    /// Number of object instances currently registered.
+    #[doc(hidden)]
+    pub fn _testing_object_instance_count(&self) -> usize {
+        self.object_instances.read().len()
+    }
+
+    /// `true` if no object instances are currently registered.
+    #[doc(hidden)]
+    pub fn _testing_object_instances_empty(&self) -> bool {
+        self.object_instances.read().is_empty()
+    }
+
+    /// Snapshot of the first registered object instance (insertion order
+    /// is hash-randomized, so this is only meaningful when exactly one
+    /// instance is registered).
+    #[doc(hidden)]
+    pub fn _testing_first_object_instance(&self) -> Option<(ObjectInstanceHandle, String)> {
+        self.object_instances
+            .read()
+            .values()
+            .next()
+            .map(|inst| (inst.handle, inst.name.clone()))
+    }
+
+    /// Number of currently joined federates.
+    #[doc(hidden)]
+    pub fn _testing_federate_count(&self) -> usize {
+        self.federates.read().len()
+    }
+
+    /// Wipe all registered object instances. Used by the save/restore
+    /// test to simulate a process restart.
+    #[doc(hidden)]
+    pub fn _testing_clear_object_instances(&self) {
+        self.object_instances.write().clear();
+    }
+
+    /// Subscriber count for one `(class, attribute)` slot in the
+    /// subscription matrix. `None` if no subscription exists.
+    #[doc(hidden)]
+    pub fn _testing_attribute_subscriber_count(
+        &self,
+        class: ObjectClassHandle,
+        attr: AttributeHandle,
+    ) -> Option<usize> {
+        self.subscriptions
+            .read()
+            .by_attribute
+            .get(&(class, attr))
+            .map(std::collections::HashSet::len)
+    }
+
+    /// `true` if any federate is subscribed to the given interaction class.
+    #[doc(hidden)]
+    pub fn _testing_interaction_subscribed(&self, class: InteractionClassHandle) -> bool {
+        self.subscriptions
+            .read()
+            .by_interaction
+            .contains_key(&class)
     }
 }
 

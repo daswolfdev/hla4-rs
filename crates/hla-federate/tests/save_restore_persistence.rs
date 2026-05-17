@@ -140,8 +140,8 @@ async fn save_writes_snapshot_to_disk_then_restore_reads_it() {
     // Verify in-memory state survives. Now blow it away to simulate restart.
     {
         let f = node._testing_federation("sr-fed").unwrap();
-        f.object_instances.write().clear();
-        assert!(f.object_instances.read().is_empty());
+        f._testing_clear_object_instances();
+        assert!(f._testing_object_instances_empty());
     }
 
     // Issue restore — should re-populate object_instances from disk.
@@ -161,9 +161,13 @@ async fn save_writes_snapshot_to_disk_then_restore_reads_it() {
     // The restored instance should be back in the registry.
     {
         let f = node._testing_federation("sr-fed").unwrap();
-        let inst = f.object_instances.read();
-        assert_eq!(inst.len(), 1, "instance should be restored");
-        assert_eq!(inst.values().next().unwrap().handle, instance);
+        assert_eq!(
+            f._testing_object_instance_count(),
+            1,
+            "instance should be restored"
+        );
+        let (handle, _) = f._testing_first_object_instance().unwrap();
+        assert_eq!(handle, instance);
     }
 
     a.federate_restore_complete().await.unwrap();
