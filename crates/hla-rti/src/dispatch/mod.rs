@@ -17,11 +17,11 @@
 //! mod.rs `use submod::*;`s pull the handler fns back into scope so the
 //! match arms read unchanged.
 
-// Many of the imports below are required by `dispatch_call`'s match arms
-// but are also surface area used by the extracted submodules via
-// `use super::*;`. The list is over-broad on purpose; tightening it
-// belongs in a follow-up.
-#![allow(unused_imports)]
+// `use submod::*;` at the bottom re-exports every handler back into this
+// scope, which the match arms in `dispatch_call` rely on. The imports
+// here serve both `dispatch_call` directly and propagate to submodules
+// via their `use super::*;` — so over-broad imports are load-bearing,
+// not noise.
 
 use std::collections::HashMap;
 use std::sync::Arc;
