@@ -21,7 +21,7 @@ pub(crate) struct SessionContext {
 }
 
 #[derive(Clone)]
-pub struct Membership {
+pub(crate) struct Membership {
     pub federation: Arc<Federation>,
     pub federate_handle: FederateHandle,
     pub federate_name: String,

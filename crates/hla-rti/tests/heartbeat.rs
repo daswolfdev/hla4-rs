@@ -99,7 +99,7 @@ async fn silent_client_is_reaped_after_missing_timeout() {
     let ack = client_open_session(&mut sock).await.unwrap();
 
     // Connection should be registered.
-    assert!(node.connections.get(&ack.session_id).is_some());
+    assert!(node.has_connection(ack.session_id));
 
     // Stay silent long enough that the liveness check trips
     // (timeout=200ms, checked every 50ms).
@@ -107,7 +107,7 @@ async fn silent_client_is_reaped_after_missing_timeout() {
 
     // Server should have removed the connection.
     assert!(
-        node.connections.get(&ack.session_id).is_none(),
+        !node.has_connection(ack.session_id),
         "connection should have been reaped after silent timeout"
     );
 
@@ -170,7 +170,7 @@ async fn active_client_is_not_reaped() {
     // Wait several heartbeat cycles.
     tokio::time::sleep(Duration::from_millis(500)).await;
     assert!(
-        node.connections.get(&session_id).is_some(),
+        node.has_connection(session_id),
         "responsive client should NOT have been reaped"
     );
 

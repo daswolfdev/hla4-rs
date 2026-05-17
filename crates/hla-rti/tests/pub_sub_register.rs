@@ -300,8 +300,7 @@ async fn publish_then_register_object_instance() {
     assert_eq!(inst.data.len(), 8, "ObjectInstanceHandle is 8 BE bytes");
 
     // Verify the instance landed in the federation registry.
-    let federations = node.federations.read();
-    let fed = federations.get("fed-pub").unwrap();
+    let fed = node._testing_federation("fed-pub").unwrap();
     let instances = fed.object_instances.read();
     assert_eq!(instances.len(), 1);
     let (_, single) = instances.iter().next().unwrap();
@@ -354,8 +353,7 @@ async fn subscribe_populates_federation_subscription_matrix() {
     // Federation-side: the subscription matrix has an entry for (Drink, NumberCups)
     let drink_raw = u32::from_be_bytes(drink.data[..].try_into().unwrap());
     let cups_raw = u32::from_be_bytes(cups.data[..].try_into().unwrap());
-    let federations = node.federations.read();
-    let fed = federations.get("fed-sub").unwrap();
+    let fed = node._testing_federation("fed-sub").unwrap();
     let subs = fed.subscriptions.read();
     let key = (
         hla_core::ObjectClassHandle::new(drink_raw),
@@ -404,8 +402,7 @@ async fn unsubscribe_clears_federation_subscription_matrix() {
 
     let drink_raw = u32::from_be_bytes(drink.data[..].try_into().unwrap());
     let cups_raw = u32::from_be_bytes(cups.data[..].try_into().unwrap());
-    let federations = node.federations.read();
-    let fed = federations.get("fed-unsub").unwrap();
+    let fed = node._testing_federation("fed-unsub").unwrap();
     let subs = fed.subscriptions.read();
     let key = (
         hla_core::ObjectClassHandle::new(drink_raw),
@@ -463,8 +460,7 @@ async fn publish_subscribe_interaction_class() {
 
     // Federation-side: subscription matrix populated for interaction.
     let ix_raw = u32::from_be_bytes(ix.data[..].try_into().unwrap());
-    let federations = node.federations.read();
-    let fed = federations.get("fed-ix-sub").unwrap();
+    let fed = node._testing_federation("fed-ix-sub").unwrap();
     let subs = fed.subscriptions.read();
     let ix_handle = hla_core::InteractionClassHandle::new(ix_raw);
     assert!(subs.by_interaction.contains_key(&ix_handle));
