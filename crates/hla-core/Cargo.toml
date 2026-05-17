@@ -1,0 +1,10 @@
+[package]
+name = "hla-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Core HLA types: handles, logical time, errors. No I/O."
+
+[dependencies]
+thiserror = { workspace = true }

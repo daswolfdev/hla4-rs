@@ -1,0 +1,13 @@
+[package]
+name = "hla-omt"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "FOM / OMT XML parsing and modular FOM merge for HLA 4."
+
+[dependencies]
+hla-core  = { workspace = true }
+quick-xml = { workspace = true }
+serde     = { workspace = true }
+thiserror = { workspace = true }

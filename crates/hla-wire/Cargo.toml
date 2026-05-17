@@ -1,0 +1,25 @@
+[package]
+name = "hla-wire"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "HLA 4 Federate Protocol session, framing, and transport (TCP/TLS/WS)."
+
+[dependencies]
+hla-core         = { workspace = true }
+hla-fedpro-proto = { workspace = true }
+tokio            = { workspace = true }
+tokio-rustls     = { workspace = true }
+rustls           = { workspace = true }
+tokio-tungstenite = { workspace = true }
+bytes            = { workspace = true }
+prost            = { workspace = true }
+thiserror        = { workspace = true }
+futures          = { workspace = true }
+tracing          = { workspace = true }
+async-trait      = { workspace = true }
+
+[dev-dependencies]
+hla-fedpro-proto = { workspace = true }
+proptest         = { workspace = true }

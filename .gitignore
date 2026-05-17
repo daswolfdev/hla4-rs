@@ -1,0 +1,9 @@
+/target
+**/*.rs.bk
+Cargo.lock
+.idea/
+.vscode/
+*.swp
+# Test artifacts: federation save snapshots are written to a relative
+# `hla4-saves/` directory when a test runs with CWD inside a crate.
+**/hla4-saves/

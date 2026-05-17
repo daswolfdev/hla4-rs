@@ -1,0 +1,33 @@
+[package]
+name = "hla-rti"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "HLA 4 RTI server: federation registry, subscription matching, message routing."
+
+[dependencies]
+hla-core         = { workspace = true }
+hla-encoding     = { workspace = true }
+hla-omt          = { workspace = true }
+hla-wire         = { workspace = true }
+hla-fedpro-proto = { workspace = true }
+tokio            = { workspace = true }
+parking_lot      = { workspace = true }
+dashmap          = { workspace = true }
+thiserror        = { workspace = true }
+tracing          = { workspace = true }
+prost            = { workspace = true }
+bytes            = { workspace = true }
+tokio-rustls     = { workspace = true }
+rustls           = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures          = { workspace = true }
+serde            = { workspace = true }
+serde_json       = { workspace = true }
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true }
+prost              = { workspace = true }
+hla-fedpro-proto   = { workspace = true }
+rcgen              = "0.13"

@@ -1,0 +1,19 @@
+[package]
+name = "hla-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "rtiexec — HLA 4 RTI server binary."
+
+[[bin]]
+name = "rtiexec"
+path = "src/main.rs"
+
+[dependencies]
+hla-rti  = { workspace = true }
+hla-wire = { workspace = true }
+tokio    = { workspace = true }
+clap     = { workspace = true }
+tracing  = { workspace = true }
+tracing-subscriber = { workspace = true }

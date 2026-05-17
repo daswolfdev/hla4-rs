@@ -1,0 +1,60 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/hla-core",
+    "crates/hla-encoding",
+    "crates/hla-omt",
+    "crates/hla-fedpro-proto",
+    "crates/hla-wire",
+    "crates/hla-rti",
+    "crates/hla-federate",
+    "crates/hla-cli",
+    "examples/sushi-publisher",
+    "examples/sushi-subscriber",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "Apache-2.0"
+repository = "https://github.com/zvs/hla4-rs"
+
+[workspace.dependencies]
+hla-core         = { path = "crates/hla-core" }
+hla-encoding     = { path = "crates/hla-encoding" }
+hla-omt          = { path = "crates/hla-omt" }
+hla-fedpro-proto = { path = "crates/hla-fedpro-proto" }
+hla-wire         = { path = "crates/hla-wire" }
+hla-rti          = { path = "crates/hla-rti" }
+hla-federate     = { path = "crates/hla-federate" }
+
+# third-party
+tokio        = { version = "1", features = ["rt-multi-thread", "macros", "io-util", "net", "sync", "time", "signal"] }
+tokio-rustls = "0.26"
+rustls       = "0.23"
+tokio-tungstenite = "0.24"
+bytes        = "1"
+prost        = "0.13"
+prost-build  = "0.13"
+quick-xml    = { version = "0.36", features = ["serialize"] }
+serde        = { version = "1", features = ["derive"] }
+serde_json   = "1"
+thiserror    = "2"
+async-trait  = "0.1"
+futures      = "0.3"
+tracing      = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap         = { version = "4", features = ["derive"] }
+parking_lot  = "0.12"
+dashmap      = "6"
+proptest     = "1"
+rcgen        = "0.13"
+
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

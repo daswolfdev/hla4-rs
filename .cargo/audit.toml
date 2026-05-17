@@ -1,0 +1,13 @@
+# cargo-audit configuration.
+#
+# Run with:  cargo audit
+#
+# Mission-critical artifact: continuous monitoring of RustSec advisories
+# against this workspace's locked dependency graph. CI should run this on
+# every push and fail on any non-ignored advisory.
+
+[advisories]
+ignore = []  # any temporary RUSTSEC-XXXX-YYYY exceptions go here, with a comment
+
+[output]
+deny = ["unmaintained", "unsound", "yanked"]

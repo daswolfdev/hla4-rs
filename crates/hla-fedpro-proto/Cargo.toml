@@ -1,0 +1,13 @@
+[package]
+name = "hla-fedpro-proto"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Generated protobuf types for the HLA 4 Federate Protocol (IEEE 1516.1-2025)."
+
+[dependencies]
+prost = { workspace = true }
+
+[build-dependencies]
+prost-build = { workspace = true }

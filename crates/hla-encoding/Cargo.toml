@@ -1,0 +1,10 @@
+[package]
+name = "hla-encoding"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "HLA standard MIM data types (HLAinteger32BE, HLAfixedRecord, ...)"
+
+[dependencies]
+thiserror = { workspace = true }

@@ -1,0 +1,28 @@
+[package]
+name = "hla-federate"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Federate-side HLA 4 library: RTIambassador + FederateAmbassador."
+
+[dependencies]
+hla-core         = { workspace = true }
+hla-encoding     = { workspace = true }
+hla-omt          = { workspace = true }
+hla-wire         = { workspace = true }
+hla-fedpro-proto = { workspace = true }
+tokio            = { workspace = true }
+tokio-rustls     = { workspace = true }
+rustls           = { workspace = true }
+tokio-tungstenite = { workspace = true }
+async-trait      = { workspace = true }
+thiserror        = { workspace = true }
+tracing          = { workspace = true }
+prost            = { workspace = true }
+parking_lot      = { workspace = true }
+
+[dev-dependencies]
+hla-rti          = { workspace = true }
+tracing-subscriber = { workspace = true }
+rcgen            = "0.13"
