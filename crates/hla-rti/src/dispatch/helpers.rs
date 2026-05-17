@@ -1,4 +1,8 @@
-//! Dispatch handlers for the helpers service group.
+//! Cross-cutting dispatch helpers.
+//!
+//! Holds `exception` / `exception_variant` (used by every service
+//! group to build error responses) and the dead-code-suppressed
+//! `_force_use_objectclass_handle_type` marker.
 //!
 //! All shared imports live in `super` (`dispatch/mod.rs`) and are
 //! picked up via `use super::*;` — see the module-layout note there.
