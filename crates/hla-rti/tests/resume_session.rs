@@ -101,7 +101,7 @@ async fn resume_after_drop_within_window_preserves_membership() {
     // Federation should have one federate.
     {
         let f = node._testing_federation("resume-fed").unwrap();
-        assert_eq!(f.federates.read().len(), 1);
+        assert_eq!(f._testing_federate_count(), 1);
     }
 
     // Drop the transport — server should suspend, not auto-resign.
@@ -114,7 +114,7 @@ async fn resume_after_drop_within_window_preserves_membership() {
     {
         let f = node._testing_federation("resume-fed").unwrap();
         assert_eq!(
-            f.federates.read().len(),
+            f._testing_federate_count(),
             1,
             "federate should still be joined"
         );
@@ -134,7 +134,7 @@ async fn resume_after_drop_within_window_preserves_membership() {
     assert!(!node.has_suspended_session(session_id));
     {
         let f = node._testing_federation("resume-fed").unwrap();
-        assert_eq!(f.federates.read().len(), 1);
+        assert_eq!(f._testing_federate_count(), 1);
     }
 
     // Subsequent calls work on the resumed session.

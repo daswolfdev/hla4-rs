@@ -301,10 +301,9 @@ async fn publish_then_register_object_instance() {
 
     // Verify the instance landed in the federation registry.
     let fed = node._testing_federation("fed-pub").unwrap();
-    let instances = fed.object_instances.read();
-    assert_eq!(instances.len(), 1);
-    let (_, single) = instances.iter().next().unwrap();
-    assert_eq!(single.name, "HLA1");
+    assert_eq!(fed._testing_object_instance_count(), 1);
+    let (_, name) = fed._testing_first_object_instance().unwrap();
+    assert_eq!(name, "HLA1");
 }
 
 #[tokio::test]
@@ -354,16 +353,13 @@ async fn subscribe_populates_federation_subscription_matrix() {
     let drink_raw = u32::from_be_bytes(drink.data[..].try_into().unwrap());
     let cups_raw = u32::from_be_bytes(cups.data[..].try_into().unwrap());
     let fed = node._testing_federation("fed-sub").unwrap();
-    let subs = fed.subscriptions.read();
-    let key = (
-        hla_core::ObjectClassHandle::new(drink_raw),
-        hla_core::AttributeHandle::new(cups_raw),
-    );
-    let subscribers = subs
-        .by_attribute
-        .get(&key)
+    let count = fed
+        ._testing_attribute_subscriber_count(
+            hla_core::ObjectClassHandle::new(drink_raw),
+            hla_core::AttributeHandle::new(cups_raw),
+        )
         .expect("subscriber entry missing");
-    assert_eq!(subscribers.len(), 1);
+    assert_eq!(count, 1);
 }
 
 #[tokio::test]
@@ -403,13 +399,12 @@ async fn unsubscribe_clears_federation_subscription_matrix() {
     let drink_raw = u32::from_be_bytes(drink.data[..].try_into().unwrap());
     let cups_raw = u32::from_be_bytes(cups.data[..].try_into().unwrap());
     let fed = node._testing_federation("fed-unsub").unwrap();
-    let subs = fed.subscriptions.read();
-    let key = (
-        hla_core::ObjectClassHandle::new(drink_raw),
-        hla_core::AttributeHandle::new(cups_raw),
-    );
     assert!(
-        !subs.by_attribute.contains_key(&key),
+        fed._testing_attribute_subscriber_count(
+            hla_core::ObjectClassHandle::new(drink_raw),
+            hla_core::AttributeHandle::new(cups_raw),
+        )
+        .is_none(),
         "subscription should have been removed"
     );
 }
@@ -461,9 +456,8 @@ async fn publish_subscribe_interaction_class() {
     // Federation-side: subscription matrix populated for interaction.
     let ix_raw = u32::from_be_bytes(ix.data[..].try_into().unwrap());
     let fed = node._testing_federation("fed-ix-sub").unwrap();
-    let subs = fed.subscriptions.read();
     let ix_handle = hla_core::InteractionClassHandle::new(ix_raw);
-    assert!(subs.by_interaction.contains_key(&ix_handle));
+    assert!(fed._testing_interaction_subscribed(ix_handle));
 }
 
 #[tokio::test]
