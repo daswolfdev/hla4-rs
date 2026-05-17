@@ -136,10 +136,6 @@ async fn wait_for<F: Fn() -> bool>(timeout: Duration, predicate: F) -> bool {
     predicate()
 }
 
-// `parking_lot::Mutex` guards are taken and explicitly `drop`-ed before
-// every `.await` in this test. Clippy's `await_holding_lock` heuristic
-// can't see the explicit drop, so allow at the fn level.
-#[allow(clippy::await_holding_lock)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn full_pub_sub_via_federate_library() {
     let addr = boot_rti().await;
@@ -236,29 +232,32 @@ async fn full_pub_sub_via_federate_library() {
         recorder.interactions.lock().len()
     );
 
-    // Validate contents.
-    let discoveries = recorder.discoveries.lock();
-    assert_eq!(discoveries.len(), 1);
-    assert_eq!(discoveries[0].0, instance);
-    assert_eq!(discoveries[0].1, drink_class);
-    drop(discoveries);
-
-    let reflects = recorder.reflects.lock();
-    assert_eq!(reflects.len(), 1);
-    assert_eq!(reflects[0].0, instance);
-    assert_eq!(reflects[0].1.get(&cups_attr).unwrap(), &42i32.to_be_bytes());
-    assert_eq!(reflects[0].2, b"first-pour");
-    drop(reflects);
-
-    let interactions = recorder.interactions.lock();
-    assert_eq!(interactions.len(), 1);
-    assert_eq!(interactions[0].0, food_served);
-    assert_eq!(
-        interactions[0].1.get(&food_type_param).unwrap(),
-        &b"sushi".to_vec()
-    );
-    assert_eq!(interactions[0].2, b"order-1");
-    drop(interactions);
+    // Validate contents. Each lock is scoped to a bare block so the guard's
+    // lifetime ends before any subsequent `.await` — keeps the
+    // `await_holding_lock` lint sound without a function-level allow.
+    {
+        let discoveries = recorder.discoveries.lock();
+        assert_eq!(discoveries.len(), 1);
+        assert_eq!(discoveries[0].0, instance);
+        assert_eq!(discoveries[0].1, drink_class);
+    }
+    {
+        let reflects = recorder.reflects.lock();
+        assert_eq!(reflects.len(), 1);
+        assert_eq!(reflects[0].0, instance);
+        assert_eq!(reflects[0].1.get(&cups_attr).unwrap(), &42i32.to_be_bytes());
+        assert_eq!(reflects[0].2, b"first-pour");
+    }
+    {
+        let interactions = recorder.interactions.lock();
+        assert_eq!(interactions.len(), 1);
+        assert_eq!(interactions[0].0, food_served);
+        assert_eq!(
+            interactions[0].1.get(&food_type_param).unwrap(),
+            &b"sushi".to_vec()
+        );
+        assert_eq!(interactions[0].2, b"order-1");
+    }
 
     // Delete + verify remove callback.
     publisher

@@ -228,10 +228,6 @@ async fn destroy_blocked_while_joined() {
     ));
 }
 
-// We intentionally `mem::forget` the TCP sockets so the federates stay
-// "joined" for the duration of the test — the RTI's federate registry is
-// keyed on the live connection. Allow at the fn level.
-#[allow(clippy::mem_forget)]
 #[tokio::test]
 async fn two_federates_get_distinct_handles() {
     let addr = boot().await;
@@ -247,6 +243,11 @@ async fn two_federates_get_distinct_handles() {
         ),
     );
 
+    // Hold sockets in a Vec for the duration of the test so each federate
+    // stays joined — the RTI keys its federate registry on the live TCP
+    // connection. The previous version used `mem::forget(sock)`, which
+    // leaked the FD; this is properly closed when `_sockets` drops.
+    let mut _sockets: Vec<(TcpStream, ClientSeqState)> = Vec::new();
     let mut handles = Vec::new();
     for _ in 0..3 {
         let (mut sock, mut state) = open(addr).await;
@@ -262,10 +263,7 @@ async fn two_federates_get_distinct_handles() {
         let fh = jr.federate_handle.unwrap();
         let raw = u32::from_be_bytes(fh.data.as_slice().try_into().unwrap());
         handles.push(raw);
-        // Don't drop `sock` — keep the TCP connection alive so the federate
-        // stays in the registry. `state` has no Drop side-effects.
-        std::mem::forget(sock);
-        let _state = state;
+        _sockets.push((sock, state));
     }
 
     let uniques: std::collections::HashSet<_> = handles.iter().copied().collect();

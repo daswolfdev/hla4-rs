@@ -84,8 +84,6 @@ async fn wait_for<F: Fn() -> bool>(timeout: Duration, f: F) -> bool {
     f()
 }
 
-// `parking_lot::Mutex` guards are explicitly `drop`-ed before each `.await`.
-#[allow(clippy::await_holding_lock)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn save_writes_snapshot_to_disk_then_restore_reads_it() {
     let tmp = std::env::temp_dir().join(format!("hla4-saves-{}", std::process::id()));
@@ -156,10 +154,11 @@ async fn save_writes_snapshot_to_disk_then_restore_reads_it() {
         })
         .await
     );
-    let init = rec_a.initiate_restore.lock();
-    assert_eq!(init[0].0, "snap-1");
-    assert_eq!(init[0].1, "Alice");
-    drop(init);
+    {
+        let init = rec_a.initiate_restore.lock();
+        assert_eq!(init[0].0, "snap-1");
+        assert_eq!(init[0].1, "Alice");
+    }
 
     // The restored instance should be back in the registry.
     {
