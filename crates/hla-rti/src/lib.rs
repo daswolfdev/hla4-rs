@@ -50,24 +50,14 @@ pub use metrics::{MetricsSnapshot, ServerMetrics};
 
 /// Per-connection writer handle. Owned via `Arc` so dispatch handlers (which
 /// fire callbacks at *other* federates' connections) can clone the handle
-/// from [`RtiNode`]'s internal connection map and push frames without
+/// from `RtiNode`'s internal connection map and push frames without
 /// holding the lock.
-///
-/// Public for `Arc<ConnectionHandle>` returns from the introspection
-/// accessors; the inner fields are crate-private.
-pub struct ConnectionHandle {
+pub(crate) struct ConnectionHandle {
     pub(crate) session_id: u64,
     pub(crate) frame_tx: mpsc::Sender<Frame>,
     /// Monotonic sequence number for `HLA_CALLBACK_REQUEST` frames the RTI
     /// emits to this federate. Independent of the client's outbound seq.
     pub(crate) next_outbound_seq: AtomicI32,
-}
-
-impl ConnectionHandle {
-    /// FedPro session id assigned by the RTI on handshake.
-    pub fn session_id(&self) -> u64 {
-        self.session_id
-    }
 }
 
 /// Connection limits for DoS mitigation.
@@ -443,6 +433,7 @@ pub struct SyncPoint {
     pub failed_to_sync: HashSet<FederateHandle>,
 }
 
+#[doc(hidden)] // exposed only via RtiNode::_testing_federation
 pub struct Federation {
     pub name: String,
     pub fom: Arc<MergedFom>,
@@ -588,9 +579,12 @@ impl RtiNode {
     ///
     /// **Test-only.** Returns the live `Arc<Federation>`; callers can
     /// hold locks on its inner state, which is fine for assertions in
-    /// integration tests but a deadlock vector if used from
-    /// application code. The `Federation` type is `#[doc(hidden)]` for
-    /// the same reason — it's not part of the stable surface.
+    /// integration tests but a deadlock vector from application code.
+    /// `Federation` itself is `#[doc(hidden)]` for the same reason —
+    /// it is not part of the stable surface. Tightening
+    /// `Federation`'s own inner fields to `pub(crate)` is tracked as
+    /// the second half of audit M2 and intentionally deferred to a
+    /// follow-up PR.
     #[doc(hidden)]
     pub fn _testing_federation(&self, name: &str) -> Option<Arc<Federation>> {
         self.federations.read().get(name).cloned()
