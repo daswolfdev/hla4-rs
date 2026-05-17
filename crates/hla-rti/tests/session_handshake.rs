@@ -6,7 +6,6 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
 
 use hla_rti::RtiNode;
 use hla_wire::{SessionState, client_open_session};
@@ -25,10 +24,6 @@ async fn bind_and_serve_in_background() -> SocketAddr {
 #[tokio::test]
 async fn rust_client_handshakes_with_rust_server() {
     let addr = bind_and_serve_in_background().await;
-
-    // Give the accept loop a tick to schedule itself.
-    tokio::time::sleep(Duration::from_millis(20)).await;
-
     let mut stream = TcpStream::connect(addr).await.expect("connect");
     let ack = client_open_session(&mut stream).await.expect("handshake");
 
@@ -43,8 +38,6 @@ async fn rust_client_handshakes_with_rust_server() {
 #[tokio::test]
 async fn multiple_clients_get_distinct_session_ids() {
     let addr = bind_and_serve_in_background().await;
-    tokio::time::sleep(Duration::from_millis(20)).await;
-
     let mut ids = Vec::new();
     for _ in 0..4 {
         let mut stream = TcpStream::connect(addr).await.expect("connect");
@@ -66,8 +59,6 @@ async fn shared_arc_rtinode_keeps_serving() {
     tokio::spawn(async move {
         let _ = node.serve(listener).await;
     });
-    tokio::time::sleep(Duration::from_millis(20)).await;
-
     let mut stream = TcpStream::connect(addr).await.expect("connect");
     let ack = client_open_session(&mut stream).await.expect("handshake");
     assert_eq!(ack.state, SessionState::Running);

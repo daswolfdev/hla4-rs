@@ -5,7 +5,6 @@
 //! registry, and come back as typed `CallResponse`s the client can match on.
 
 use std::net::SocketAddr;
-use std::time::Duration;
 
 use hla_fedpro_proto::fedpro;
 use hla_rti::RtiNode;
@@ -21,7 +20,6 @@ async fn boot() -> SocketAddr {
     tokio::spawn(async move {
         let _ = node.serve(listener).await;
     });
-    tokio::time::sleep(Duration::from_millis(20)).await;
     addr
 }
 

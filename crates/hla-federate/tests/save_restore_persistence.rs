@@ -43,7 +43,6 @@ async fn boot_with_save_dir(dir: std::path::PathBuf) -> (SocketAddr, Arc<RtiNode
     tokio::spawn(async move {
         let _ = serve.serve(listener).await;
     });
-    tokio::time::sleep(Duration::from_millis(30)).await;
     (addr, node)
 }
 

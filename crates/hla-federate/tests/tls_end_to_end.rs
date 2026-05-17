@@ -131,8 +131,6 @@ async fn pub_sub_over_tls() {
     tokio::spawn(async move {
         let _ = serve_node.serve_tls(listener, acceptor).await;
     });
-    tokio::time::sleep(Duration::from_millis(20)).await;
-
     let url = format!("rti://{addr}");
     let server_name = ServerName::try_from("localhost").unwrap();
 

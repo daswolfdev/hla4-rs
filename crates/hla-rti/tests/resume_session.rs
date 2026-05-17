@@ -42,7 +42,6 @@ async fn boot(reconnect_window: Duration) -> (SocketAddr, Arc<RtiNode>) {
     tokio::spawn(async move {
         janitor_node.run_suspended_session_janitor().await;
     });
-    tokio::time::sleep(Duration::from_millis(30)).await;
     (addr, node)
 }
 

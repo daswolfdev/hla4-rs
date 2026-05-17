@@ -11,6 +11,7 @@ description = "HLA 4 Federate Protocol session, framing, and transport (TCP/TLS/
 hla-core         = { workspace = true }
 hla-fedpro-proto = { workspace = true }
 tokio            = { workspace = true }
+tokio-util       = { workspace = true }
 tokio-rustls     = { workspace = true }
 rustls           = { workspace = true }
 tokio-tungstenite = { workspace = true }

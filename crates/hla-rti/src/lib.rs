@@ -735,8 +735,9 @@ impl RtiNode {
     {
         // Wrap the byte stream into our frame-transport abstraction.
         let (read_half, write_half) = tokio::io::split(sock);
-        let source: Box<dyn FrameSource + Send + 'static> = Box::new(AsyncReadSource(read_half));
-        let sink: Box<dyn FrameSink + Send + 'static> = Box::new(AsyncWriteSink(write_half));
+        let source: Box<dyn FrameSource + Send + 'static> =
+            Box::new(AsyncReadSource::new(read_half));
+        let sink: Box<dyn FrameSink + Send + 'static> = Box::new(AsyncWriteSink::new(write_half));
         self.handle_connection_via_transport(source, sink, session_id)
             .await
     }

@@ -49,7 +49,6 @@ async fn boot() -> SocketAddr {
     tokio::spawn(async move {
         let _ = node.serve(listener).await;
     });
-    tokio::time::sleep(Duration::from_millis(30)).await;
     addr
 }
 

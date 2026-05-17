@@ -73,8 +73,6 @@ async fn pub_sub_over_websocket() {
     tokio::spawn(async move {
         let _ = serve.serve_ws(listener).await;
     });
-    tokio::time::sleep(Duration::from_millis(50)).await;
-
     let url = format!("ws://{addr}");
 
     // Subscriber over WebSocket.

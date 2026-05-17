@@ -17,7 +17,6 @@ async fn boot(limits: ConnectionLimits) -> (SocketAddr, Arc<RtiNode>) {
     tokio::spawn(async move {
         let _ = serve.serve(listener).await;
     });
-    tokio::time::sleep(Duration::from_millis(20)).await;
     (addr, node)
 }
 
