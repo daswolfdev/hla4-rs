@@ -18,11 +18,13 @@
 //! across drops of the polling future. This is the contract the
 //! `RtiNode` accept loop's `tokio::select!` relies on.
 //!
-//! [`FrameSink::send_frame`] is **NOT** cancel-safe. The underlying
-//! `Sink::send` carries partial-write state; dropping the future
-//! mid-await can leave a half-written frame on the wire. Drive
-//! `send_frame` strictly serially from a dedicated writer task — do not
-//! `select!` on it alongside competing branches that may fire.
+//! [`FrameSink::send_frame`] is **NOT** cancel-safe. `FramedWrite` may
+//! buffer bytes from the dropped frame in its internal `BytesMut`; the
+//! next `send_frame` call will flush them along with the new frame, so
+//! as long as access stays serial nothing is corrupted — but concurrent
+//! senders or `select!`-driven cancellation can interleave frame data
+//! and desync the receiver. Drive `send_frame` strictly serially from a
+//! dedicated writer task.
 
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
@@ -48,8 +50,8 @@ pub trait FrameSink: Send {
     /// Send `frame` and flush the underlying transport.
     ///
     /// **NOT cancel-safe** in general. Implementations are permitted to
-    /// hold partial-write state across `.await` points; dropping the
-    /// future may leave the transport in an inconsistent state. Drive
+    /// hold partial-write state across `.await` points; the next call
+    /// may pick up leftover bytes from a dropped previous call. Drive
     /// from a dedicated writer task, never `select!`.
     async fn send_frame(&mut self, frame: &Frame) -> Result<(), CodecError>;
 }

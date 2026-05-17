@@ -72,6 +72,7 @@ pub fn claim_next_outbound_seq(atomic: &std::sync::atomic::AtomicI32) -> i32 {
 }
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum FrameError {
     #[error("packet too small: {0} < {HEADER_SIZE}")]
     PacketTooSmall(u32),

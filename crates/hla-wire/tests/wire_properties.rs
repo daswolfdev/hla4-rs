@@ -155,12 +155,8 @@ proptest! {
     fn header_decode_never_panics(bytes in prop::collection::vec(any::<u8>(), 0..128)) {
         let result = MessageHeader::decode(&bytes);
         // Either succeeds or returns a structured error; never panics.
-        match result {
-            Ok(_) | Err(FrameError::Truncated { .. })
-            | Err(FrameError::PacketTooSmall(_))
-            | Err(FrameError::UnknownMessageType(_))
-            | Err(FrameError::InvalidNewSessionStatusReason(_)) => {}
-        }
+        // `FrameError` is `#[non_exhaustive]`, so accept any variant.
+        let _ = result;
     }
 
     /// Same for all body decoders.

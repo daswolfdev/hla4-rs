@@ -12,7 +12,7 @@
 //!    These are *not* cancel-safe; do not drive them from inside a
 //!    `tokio::select!` with sibling branches that may fire.
 
-use bytes::{Buf, BytesMut};
+use bytes::BytesMut;
 use thiserror::Error;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio_util::codec::{Decoder, Encoder};
@@ -62,13 +62,16 @@ impl Decoder for FedProCodec {
         size_buf.copy_from_slice(&src[..4]);
         let packet_size = u32::from_be_bytes(size_buf);
 
+        // Any framing error terminates the stream: `FramedRead` marks the
+        // codec as errored on `Err` and returns `None` thereafter, which
+        // `AsyncReadSource::recv_frame` translates into `UnexpectedEof`.
+        // Connection-tear-down on the first protocol error is the right
+        // policy for an HLA RTI handling untrusted peers; there is no
+        // recovery path that could safely re-frame.
         if (packet_size as usize) < HEADER_SIZE {
-            // Consume the bogus prefix so we don't see it again.
-            src.advance(4);
             return Err(CodecError::Frame(FrameError::PacketTooSmall(packet_size)));
         }
         if packet_size > MAX_PACKET_SIZE {
-            src.advance(4);
             return Err(CodecError::PacketTooLarge(packet_size));
         }
 
@@ -89,30 +92,17 @@ impl Decoder for FedProCodec {
     }
 }
 
-impl Encoder<Frame> for FedProCodec {
-    type Error = CodecError;
-
-    fn encode(&mut self, frame: Frame, dst: &mut BytesMut) -> Result<(), CodecError> {
-        encode_into(&frame, dst);
-        Ok(())
-    }
-}
-
 impl Encoder<&Frame> for FedProCodec {
     type Error = CodecError;
 
     fn encode(&mut self, frame: &Frame, dst: &mut BytesMut) -> Result<(), CodecError> {
-        encode_into(frame, dst);
+        dst.reserve(frame.header.packet_size as usize);
+        let mut header_bytes = [0u8; HEADER_SIZE];
+        frame.header.encode(&mut header_bytes);
+        dst.extend_from_slice(&header_bytes);
+        dst.extend_from_slice(&frame.payload);
         Ok(())
     }
-}
-
-fn encode_into(frame: &Frame, dst: &mut BytesMut) {
-    dst.reserve(frame.header.packet_size as usize);
-    let mut header_bytes = [0u8; HEADER_SIZE];
-    frame.header.encode(&mut header_bytes);
-    dst.extend_from_slice(&header_bytes);
-    dst.extend_from_slice(&frame.payload);
 }
 
 /// Read one complete FedPro frame from `reader`.
@@ -158,7 +148,10 @@ pub async fn write_frame<W: AsyncWrite + Unpin>(
     frame: &Frame,
 ) -> Result<(), CodecError> {
     let mut buf = BytesMut::with_capacity(frame.header.packet_size as usize);
-    encode_into(frame, &mut buf);
+    let mut header_bytes = [0u8; HEADER_SIZE];
+    frame.header.encode(&mut header_bytes);
+    buf.extend_from_slice(&header_bytes);
+    buf.extend_from_slice(&frame.payload);
     writer.write_all(&buf).await?;
     writer.flush().await?;
     Ok(())
