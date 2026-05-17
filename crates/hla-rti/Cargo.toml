@@ -14,6 +14,7 @@ hla-omt          = { workspace = true }
 hla-wire         = { workspace = true }
 hla-fedpro-proto = { workspace = true }
 tokio            = { workspace = true }
+tokio-util       = { workspace = true }
 parking_lot      = { workspace = true }
 dashmap          = { workspace = true }
 thiserror        = { workspace = true }

@@ -2790,7 +2790,14 @@ fn request_federation_restore(
     // a "no save was made" call.
     let snap = {
         let dir = node.save_dir.read().clone();
-        match crate::persistence::read_snapshot(&dir, &m.federation.name, &label) {
+        // `read_snapshot` performs blocking `std::fs::read_to_string`. The
+        // dispatch loop runs on a Tokio worker thread, so we use
+        // `block_in_place` to tell the runtime to migrate other tasks
+        // off this thread for the duration. Requires multi-thread
+        // runtime (which `rtiexec` and every integration test use).
+        match tokio::task::block_in_place(|| {
+            crate::persistence::read_snapshot(&dir, &m.federation.name, &label)
+        }) {
             Ok(s) => Some(s),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
             Err(e) => {
@@ -4099,7 +4106,12 @@ fn persist_federation_snapshot_on_success(node: &Arc<RtiNode>, federation: &Fede
     let Some(label) = label else { return };
     let dir = node.save_dir.read().clone();
     let snap = federation.snapshot();
-    if let Err(e) = crate::persistence::write_snapshot(&dir, &federation.name, &label, &snap) {
+    // Blocking `std::fs::write` on a Tokio worker — see the matching
+    // comment on `read_snapshot` above.
+    let result = tokio::task::block_in_place(|| {
+        crate::persistence::write_snapshot(&dir, &federation.name, &label, &snap)
+    });
+    if let Err(e) = result {
         tracing::warn!(error = %e, "snapshot write failed");
     } else {
         tracing::info!(label, "snapshot written");

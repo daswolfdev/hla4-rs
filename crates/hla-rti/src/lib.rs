@@ -478,6 +478,22 @@ impl Federation {
     }
 }
 
+/// HLA 4 RTI server node.
+///
+/// # Runtime requirements
+///
+/// `RtiNode` must run on a **multi-thread** Tokio runtime. The save /
+/// restore dispatch path calls `tokio::task::block_in_place` to keep
+/// the worker available during blocking filesystem I/O, which panics
+/// on `current_thread`. Use `#[tokio::main(flavor = "multi_thread")]`
+/// or `#[tokio::test(flavor = "multi_thread")]` accordingly. `rtiexec`
+/// pins this in `crates/hla-cli/src/main.rs`.
+///
+/// # Lifecycle
+///
+/// `bind` → `serve` (or `serve_ws` / `serve_tls`) → `shutdown`. Call
+/// `shutdown` from any thread; accept loops and the suspended-session
+/// janitor unwind cooperatively. See [`Self::shutdown`].
 pub struct RtiNode {
     pub bind_addr: SocketAddr,
     pub federations: RwLock<HashMap<String, Arc<Federation>>>,
@@ -509,6 +525,11 @@ pub struct RtiNode {
     /// Sessions whose transport has dropped but which are still eligible
     /// to be resumed within `heartbeat.reconnect_window`.
     pub suspended_sessions: DashMap<u64, SuspendedSession>,
+    /// Cooperative shutdown signal. Every accept loop, per-connection
+    /// reader, writer task, heartbeat task, and the suspended-session
+    /// janitor watch this token; cancelling it drives a graceful
+    /// drain across the node. Call [`Self::shutdown`] to trigger.
+    shutdown: tokio_util::sync::CancellationToken,
 }
 
 impl RtiNode {
@@ -525,7 +546,29 @@ impl RtiNode {
             metrics: ServerMetrics::default(),
             suspended_sessions: DashMap::new(),
             save_dir: RwLock::new(std::path::PathBuf::from("./hla4-saves")),
+            shutdown: tokio_util::sync::CancellationToken::new(),
         }
+    }
+
+    /// Trigger a graceful shutdown. Accept loops stop pulling new
+    /// connections and the suspended-session janitor exits. `serve` /
+    /// `serve_ws` / `serve_tls` return `Ok(())` once their loops
+    /// observe the cancel.
+    ///
+    /// Per-connection reader / writer / heartbeat tasks still unwind
+    /// only on peer EOF or `heartbeat.missing_timeout` — wiring the
+    /// shutdown token into `run_session_loop` is tracked as follow-up
+    /// work (see the `TODO(H4)` at the select! site in
+    /// `run_session_loop`). Idempotent — safe to call concurrently.
+    pub fn shutdown(&self) {
+        tracing::info!("shutdown requested");
+        self.shutdown.cancel();
+    }
+
+    /// Shutdown token for callers that want to bind their own tasks
+    /// to the node's lifetime (e.g., metrics exporters in `rtiexec`).
+    pub fn shutdown_token(&self) -> tokio_util::sync::CancellationToken {
+        self.shutdown.clone()
     }
 
     /// Override the directory used for save/restore snapshot files.
@@ -609,7 +652,15 @@ impl RtiNode {
 
     async fn accept_loop(self: Arc<Self>, listener: TcpListener) -> Result<(), RtiServerError> {
         loop {
-            let (sock, peer) = listener.accept().await.map_err(RtiServerError::Accept)?;
+            let accept = tokio::select! {
+                biased;
+                () = self.shutdown.cancelled() => {
+                    tracing::info!("accept loop draining on shutdown");
+                    return Ok(());
+                }
+                r = listener.accept() => r,
+            };
+            let (sock, peer) = accept.map_err(RtiServerError::Accept)?;
             if let Err(reason) = self.check_limits(peer) {
                 self.metrics
                     .connections_rejected
@@ -647,7 +698,15 @@ impl RtiNode {
     /// spec, each WebSocket Binary message carries exactly one FedPro frame.
     pub async fn serve_ws(self: Arc<Self>, listener: TcpListener) -> Result<(), RtiServerError> {
         loop {
-            let (sock, peer) = listener.accept().await.map_err(RtiServerError::Accept)?;
+            let accept = tokio::select! {
+                biased;
+                () = self.shutdown.cancelled() => {
+                    tracing::info!("ws accept loop draining on shutdown");
+                    return Ok(());
+                }
+                r = listener.accept() => r,
+            };
+            let (sock, peer) = accept.map_err(RtiServerError::Accept)?;
             if let Err(reason) = self.check_limits(peer) {
                 self.metrics
                     .connections_rejected
@@ -700,7 +759,15 @@ impl RtiNode {
         acceptor: Arc<tokio_rustls::TlsAcceptor>,
     ) -> Result<(), RtiServerError> {
         loop {
-            let (sock, peer) = listener.accept().await.map_err(RtiServerError::Accept)?;
+            let accept = tokio::select! {
+                biased;
+                () = self.shutdown.cancelled() => {
+                    tracing::info!("tls accept loop draining on shutdown");
+                    return Ok(());
+                }
+                r = listener.accept() => r,
+            };
+            let (sock, peer) = accept.map_err(RtiServerError::Accept)?;
             if let Err(reason) = self.check_limits(peer) {
                 tracing::warn!(peer = %peer, reason, "rejecting TLS connection (limit)");
                 drop(sock);
@@ -946,9 +1013,19 @@ impl RtiNode {
     /// Should be spawned alongside `serve()` / `serve_tls()` / `serve_ws()`
     /// when `heartbeat.reconnect_window` > 0.
     pub async fn run_suspended_session_janitor(self: Arc<Self>) {
-        let interval = Duration::from_millis(100);
+        let mut ticker = tokio::time::interval(Duration::from_millis(100));
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        // Discard the immediate first tick.
+        ticker.tick().await;
         loop {
-            tokio::time::sleep(interval).await;
+            tokio::select! {
+                biased;
+                () = self.shutdown.cancelled() => {
+                    tracing::info!("suspended-session janitor stopping on shutdown");
+                    return;
+                }
+                _ = ticker.tick() => {}
+            }
             let now = Instant::now();
             let expired: Vec<u64> = self
                 .suspended_sessions
@@ -998,6 +1075,10 @@ impl RtiNode {
         // Discard the immediate first tick.
         liveness_interval.tick().await;
         loop {
+            // TODO(H4): add a third select! branch on
+            // `node.shutdown.cancelled()` so in-flight sessions unwind
+            // promptly on RTI shutdown rather than waiting for peer EOF
+            // or `heartbeat.missing_timeout`.
             let frame = tokio::select! {
                 biased;
                 _ = liveness_interval.tick() => {
