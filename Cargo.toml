@@ -18,6 +18,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
 license = "Apache-2.0"
+publish = false  # internal crates; not yet published to crates.io
 repository = "https://github.com/zvs/hla4-rs"
 
 [workspace.dependencies]

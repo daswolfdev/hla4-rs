@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+publish.workspace = true
 description = "HLA 4 RTI server: federation registry, subscription matching, message routing."
 
 [dependencies]
