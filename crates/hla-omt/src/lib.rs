@@ -8,8 +8,7 @@
 use std::collections::HashMap;
 
 use hla_core::{
-    AttributeHandle, DimensionHandle, InteractionClassHandle, ObjectClassHandle,
-    ParameterHandle,
+    AttributeHandle, DimensionHandle, InteractionClassHandle, ObjectClassHandle, ParameterHandle,
 };
 use thiserror::Error;
 
@@ -212,7 +211,9 @@ impl MergedFom {
         class: ObjectClassHandle,
         name: &str,
     ) -> Option<AttributeHandle> {
-        self.attribute_table.get(&(class, name.to_string())).copied()
+        self.attribute_table
+            .get(&(class, name.to_string()))
+            .copied()
     }
 
     pub fn interaction_class_handle(&self, name: &str) -> Option<InteractionClassHandle> {
@@ -231,7 +232,9 @@ impl MergedFom {
         class: InteractionClassHandle,
         name: &str,
     ) -> Option<ParameterHandle> {
-        self.parameter_table.get(&(class, name.to_string())).copied()
+        self.parameter_table
+            .get(&(class, name.to_string()))
+            .copied()
     }
 
     pub fn dimension_handle(&self, name: &str) -> Option<DimensionHandle> {

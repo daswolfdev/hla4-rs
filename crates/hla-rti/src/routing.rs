@@ -87,7 +87,9 @@ pub fn live_connections(
         .iter()
         .filter_map(|fh| {
             let session_id = federate_map.get(fh)?.session_id;
-            node.connections.get(&session_id).map(|c| Arc::clone(c.value()))
+            node.connections
+                .get(&session_id)
+                .map(|c| Arc::clone(c.value()))
         })
         .collect()
 }
@@ -397,9 +399,7 @@ pub fn report_federation_execution_does_not_exist(
     }
 }
 
-pub fn report_federation_executions(
-    federations: &[String],
-) -> fedpro::CallbackRequest {
+pub fn report_federation_executions(federations: &[String]) -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
         callback_request: Some(
             fedpro::callback_request::CallbackRequest::ReportFederationExecutions(
@@ -450,7 +450,10 @@ pub fn attribute_ownership_unavailable(
                 fedpro::AttributeOwnershipUnavailable {
                     object_instance: Some(encode_object_instance(instance)),
                     attributes: Some(fedpro::AttributeHandleSet {
-                        attribute_handle: unavailable.iter().map(|a| encode_attribute(*a)).collect(),
+                        attribute_handle: unavailable
+                            .iter()
+                            .map(|a| encode_attribute(*a))
+                            .collect(),
                     }),
                     user_supplied_tag: tag.to_vec(),
                 },
@@ -545,11 +548,9 @@ pub fn initiate_federate_save(label: &str) -> fedpro::CallbackRequest {
 
 pub fn federation_saved() -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
-        callback_request: Some(
-            fedpro::callback_request::CallbackRequest::FederationSaved(
-                fedpro::FederationSaved {},
-            ),
-        ),
+        callback_request: Some(fedpro::callback_request::CallbackRequest::FederationSaved(
+            fedpro::FederationSaved {},
+        )),
     }
 }
 
@@ -734,13 +735,11 @@ pub fn time_constrained_enabled(time: f64) -> fedpro::CallbackRequest {
 
 pub fn time_advance_grant(time: f64) -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
-        callback_request: Some(
-            fedpro::callback_request::CallbackRequest::TimeAdvanceGrant(
-                fedpro::TimeAdvanceGrant {
-                    time: Some(encode_logical_time(time)),
-                },
-            ),
-        ),
+        callback_request: Some(fedpro::callback_request::CallbackRequest::TimeAdvanceGrant(
+            fedpro::TimeAdvanceGrant {
+                time: Some(encode_logical_time(time)),
+            },
+        )),
     }
 }
 

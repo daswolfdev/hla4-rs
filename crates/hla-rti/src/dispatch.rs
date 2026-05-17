@@ -26,9 +26,10 @@ use hla_fedpro_proto::fedpro::{
     GetParameterNameResponse, JoinFederationExecutionResponse,
     JoinFederationExecutionWithModulesResponse, JoinFederationExecutionWithNameAndModulesResponse,
     JoinFederationExecutionWithNameResponse, JoinResult, ListFederationExecutionsResponse,
-    PublishInteractionClassResponse, PublishObjectClassAttributesResponse, QueryLogicalTimeResponse,
-    QueryLookaheadResponse, RegisterObjectInstanceResponse, RegisterObjectInstanceWithNameResponse,
-    ResignFederationExecutionResponse, SendInteractionResponse, SubscribeInteractionClassResponse,
+    PublishInteractionClassResponse, PublishObjectClassAttributesResponse,
+    QueryLogicalTimeResponse, QueryLookaheadResponse, RegisterObjectInstanceResponse,
+    RegisterObjectInstanceWithNameResponse, ResignFederationExecutionResponse,
+    SendInteractionResponse, SubscribeInteractionClassResponse,
     SubscribeObjectClassAttributesResponse, TimeAdvanceRequestResponse,
     UnpublishInteractionClassResponse, UnpublishObjectClassAttributesResponse,
     UnsubscribeInteractionClassResponse, UnsubscribeObjectClassAttributesResponse,
@@ -36,6 +37,7 @@ use hla_fedpro_proto::fedpro::{
     call_response::CallResponse as Resp,
 };
 
+use crate::SyncPoint;
 use crate::handles::{
     HandleError, decode_attribute, decode_interaction_class, decode_object_class,
     decode_object_instance, decode_parameter, encode_attribute, encode_interaction_class,
@@ -48,21 +50,19 @@ use crate::routing::{
     encode_logical_time, encode_logical_time_interval, fan_out, federation_not_restored,
     federation_not_saved, federation_restore_begun, federation_restored, federation_saved,
     federation_synchronized, inform_attribute_ownership, initiate_federate_restore,
-    initiate_federate_save, live_connections, receive_directed_interaction,
-    receive_interaction, receive_interaction_with_time, reflect_attribute_values,
-    reflect_attribute_values_with_time, remove_object_instance,
-    remove_object_instance_with_time, request_federation_restore_failed,
+    initiate_federate_save, live_connections, receive_directed_interaction, receive_interaction,
+    receive_interaction_with_time, reflect_attribute_values, reflect_attribute_values_with_time,
+    remove_object_instance, remove_object_instance_with_time, request_federation_restore_failed,
     request_federation_restore_succeeded, start_registration_for_object_class,
-    stop_registration_for_object_class, subscribers_for_attributes,
-    subscribers_for_interaction, synchronization_point_registration_failed,
-    synchronization_point_registration_succeeded, time_advance_grant, time_constrained_enabled,
-    time_regulation_enabled, turn_interactions_off, turn_interactions_on,
+    stop_registration_for_object_class, subscribers_for_attributes, subscribers_for_interaction,
+    synchronization_point_registration_failed, synchronization_point_registration_succeeded,
+    time_advance_grant, time_constrained_enabled, time_regulation_enabled, turn_interactions_off,
+    turn_interactions_on,
 };
-use crate::{RestoreOperation, RestoreStatus, SaveOperation, SaveStatus};
-use crate::time::try_grant_pending_advances;
-use crate::SyncPoint;
 use crate::session::{Membership, SessionContext};
-use crate::{Federation, FederateSession, ObjectInstance, PubSubState, RtiNode};
+use crate::time::try_grant_pending_advances;
+use crate::{FederateSession, Federation, ObjectInstance, PubSubState, RtiNode};
+use crate::{RestoreOperation, RestoreStatus, SaveOperation, SaveStatus};
 
 /// Output of a single `dispatch_call`. The response goes back to the calling
 /// federate; the callbacks are RTI-initiated `HLA_CALLBACK_REQUEST` frames
@@ -104,9 +104,9 @@ pub fn dispatch_call(
         Req::CreateFederationExecutionRequest(r) => {
             let modules = r.fom_module.into_iter().collect();
             match create_federation_inner(node, r.federation_name, modules) {
-                Ok(()) => Resp::CreateFederationExecutionResponse(
-                    CreateFederationExecutionResponse {},
-                ),
+                Ok(()) => {
+                    Resp::CreateFederationExecutionResponse(CreateFederationExecutionResponse {})
+                }
                 Err(e) => e,
             }
         }
@@ -168,56 +168,203 @@ pub fn dispatch_call(
             destroy_federation_execution(node, r.federation_name)
         }
         // ---- Advisory + Reporting Switches ----
-        Req::GetObjectClassRelevanceAdvisorySwitchRequest(_) =>
-            get_switch_bool(ctx, |s| s.object_class_relevance_advisory, |r| Resp::GetObjectClassRelevanceAdvisorySwitchResponse(fedpro::GetObjectClassRelevanceAdvisorySwitchResponse { result: r })),
-        Req::SetObjectClassRelevanceAdvisorySwitchRequest(r) =>
-            set_switch_bool(ctx, r.value, |s, v| s.object_class_relevance_advisory = v,
-                || Resp::SetObjectClassRelevanceAdvisorySwitchResponse(fedpro::SetObjectClassRelevanceAdvisorySwitchResponse {})),
-        Req::GetAttributeRelevanceAdvisorySwitchRequest(_) =>
-            get_switch_bool(ctx, |s| s.attribute_relevance_advisory, |r| Resp::GetAttributeRelevanceAdvisorySwitchResponse(fedpro::GetAttributeRelevanceAdvisorySwitchResponse { result: r })),
-        Req::SetAttributeRelevanceAdvisorySwitchRequest(r) =>
-            set_switch_bool(ctx, r.value, |s, v| s.attribute_relevance_advisory = v,
-                || Resp::SetAttributeRelevanceAdvisorySwitchResponse(fedpro::SetAttributeRelevanceAdvisorySwitchResponse {})),
-        Req::GetAttributeScopeAdvisorySwitchRequest(_) =>
-            get_switch_bool(ctx, |s| s.attribute_scope_advisory, |r| Resp::GetAttributeScopeAdvisorySwitchResponse(fedpro::GetAttributeScopeAdvisorySwitchResponse { result: r })),
-        Req::SetAttributeScopeAdvisorySwitchRequest(r) =>
-            set_switch_bool(ctx, r.value, |s, v| s.attribute_scope_advisory = v,
-                || Resp::SetAttributeScopeAdvisorySwitchResponse(fedpro::SetAttributeScopeAdvisorySwitchResponse {})),
-        Req::GetInteractionRelevanceAdvisorySwitchRequest(_) =>
-            get_switch_bool(ctx, |s| s.interaction_relevance_advisory, |r| Resp::GetInteractionRelevanceAdvisorySwitchResponse(fedpro::GetInteractionRelevanceAdvisorySwitchResponse { result: r })),
-        Req::SetInteractionRelevanceAdvisorySwitchRequest(r) =>
-            set_switch_bool(ctx, r.value, |s, v| s.interaction_relevance_advisory = v,
-                || Resp::SetInteractionRelevanceAdvisorySwitchResponse(fedpro::SetInteractionRelevanceAdvisorySwitchResponse {})),
-        Req::GetConveyRegionDesignatorSetsSwitchRequest(_) =>
-            get_switch_bool(ctx, |s| s.convey_region_designator_sets, |r| Resp::GetConveyRegionDesignatorSetsSwitchResponse(fedpro::GetConveyRegionDesignatorSetsSwitchResponse { result: r })),
-        Req::SetConveyRegionDesignatorSetsSwitchRequest(r) =>
-            set_switch_bool(ctx, r.value, |s, v| s.convey_region_designator_sets = v,
-                || Resp::SetConveyRegionDesignatorSetsSwitchResponse(fedpro::SetConveyRegionDesignatorSetsSwitchResponse {})),
-        Req::GetServiceReportingSwitchRequest(_) =>
-            get_switch_bool(ctx, |s| s.service_reporting, |r| Resp::GetServiceReportingSwitchResponse(fedpro::GetServiceReportingSwitchResponse { result: r })),
-        Req::SetServiceReportingSwitchRequest(r) =>
-            set_switch_bool(ctx, r.value, |s, v| s.service_reporting = v,
-                || Resp::SetServiceReportingSwitchResponse(fedpro::SetServiceReportingSwitchResponse {})),
-        Req::GetExceptionReportingSwitchRequest(_) =>
-            get_switch_bool(ctx, |s| s.exception_reporting, |r| Resp::GetExceptionReportingSwitchResponse(fedpro::GetExceptionReportingSwitchResponse { result: r })),
-        Req::SetExceptionReportingSwitchRequest(r) =>
-            set_switch_bool(ctx, r.value, |s, v| s.exception_reporting = v,
-                || Resp::SetExceptionReportingSwitchResponse(fedpro::SetExceptionReportingSwitchResponse {})),
-        Req::GetSendServiceReportsToFileSwitchRequest(_) =>
-            get_switch_bool(ctx, |s| s.send_service_reports_to_file, |r| Resp::GetSendServiceReportsToFileSwitchResponse(fedpro::GetSendServiceReportsToFileSwitchResponse { result: r })),
-        Req::SetSendServiceReportsToFileSwitchRequest(r) =>
-            set_switch_bool(ctx, r.value, |s, v| s.send_service_reports_to_file = v,
-                || Resp::SetSendServiceReportsToFileSwitchResponse(fedpro::SetSendServiceReportsToFileSwitchResponse {})),
-        Req::GetAutoProvideSwitchRequest(_) =>
-            get_switch_bool(ctx, |s| s.auto_provide, |r| Resp::GetAutoProvideSwitchResponse(fedpro::GetAutoProvideSwitchResponse { result: r })),
-        Req::GetDelaySubscriptionEvaluationSwitchRequest(_) =>
-            get_switch_bool(ctx, |s| s.delay_subscription_evaluation, |r| Resp::GetDelaySubscriptionEvaluationSwitchResponse(fedpro::GetDelaySubscriptionEvaluationSwitchResponse { result: r })),
-        Req::GetAdvisoriesUseKnownClassSwitchRequest(_) =>
-            get_switch_bool(ctx, |s| s.advisories_use_known_class, |r| Resp::GetAdvisoriesUseKnownClassSwitchResponse(fedpro::GetAdvisoriesUseKnownClassSwitchResponse { result: r })),
-        Req::GetAllowRelaxedDdmSwitchRequest(_) =>
-            get_switch_bool(ctx, |s| s.allow_relaxed_ddm, |r| Resp::GetAllowRelaxedDdmSwitchResponse(fedpro::GetAllowRelaxedDdmSwitchResponse { result: r })),
-        Req::GetNonRegulatedGrantSwitchRequest(_) =>
-            get_switch_bool(ctx, |s| s.non_regulated_grant, |r| Resp::GetNonRegulatedGrantSwitchResponse(fedpro::GetNonRegulatedGrantSwitchResponse { result: r })),
+        Req::GetObjectClassRelevanceAdvisorySwitchRequest(_) => get_switch_bool(
+            ctx,
+            |s| s.object_class_relevance_advisory,
+            |r| {
+                Resp::GetObjectClassRelevanceAdvisorySwitchResponse(
+                    fedpro::GetObjectClassRelevanceAdvisorySwitchResponse { result: r },
+                )
+            },
+        ),
+        Req::SetObjectClassRelevanceAdvisorySwitchRequest(r) => set_switch_bool(
+            ctx,
+            r.value,
+            |s, v| s.object_class_relevance_advisory = v,
+            || {
+                Resp::SetObjectClassRelevanceAdvisorySwitchResponse(
+                    fedpro::SetObjectClassRelevanceAdvisorySwitchResponse {},
+                )
+            },
+        ),
+        Req::GetAttributeRelevanceAdvisorySwitchRequest(_) => get_switch_bool(
+            ctx,
+            |s| s.attribute_relevance_advisory,
+            |r| {
+                Resp::GetAttributeRelevanceAdvisorySwitchResponse(
+                    fedpro::GetAttributeRelevanceAdvisorySwitchResponse { result: r },
+                )
+            },
+        ),
+        Req::SetAttributeRelevanceAdvisorySwitchRequest(r) => set_switch_bool(
+            ctx,
+            r.value,
+            |s, v| s.attribute_relevance_advisory = v,
+            || {
+                Resp::SetAttributeRelevanceAdvisorySwitchResponse(
+                    fedpro::SetAttributeRelevanceAdvisorySwitchResponse {},
+                )
+            },
+        ),
+        Req::GetAttributeScopeAdvisorySwitchRequest(_) => get_switch_bool(
+            ctx,
+            |s| s.attribute_scope_advisory,
+            |r| {
+                Resp::GetAttributeScopeAdvisorySwitchResponse(
+                    fedpro::GetAttributeScopeAdvisorySwitchResponse { result: r },
+                )
+            },
+        ),
+        Req::SetAttributeScopeAdvisorySwitchRequest(r) => set_switch_bool(
+            ctx,
+            r.value,
+            |s, v| s.attribute_scope_advisory = v,
+            || {
+                Resp::SetAttributeScopeAdvisorySwitchResponse(
+                    fedpro::SetAttributeScopeAdvisorySwitchResponse {},
+                )
+            },
+        ),
+        Req::GetInteractionRelevanceAdvisorySwitchRequest(_) => get_switch_bool(
+            ctx,
+            |s| s.interaction_relevance_advisory,
+            |r| {
+                Resp::GetInteractionRelevanceAdvisorySwitchResponse(
+                    fedpro::GetInteractionRelevanceAdvisorySwitchResponse { result: r },
+                )
+            },
+        ),
+        Req::SetInteractionRelevanceAdvisorySwitchRequest(r) => set_switch_bool(
+            ctx,
+            r.value,
+            |s, v| s.interaction_relevance_advisory = v,
+            || {
+                Resp::SetInteractionRelevanceAdvisorySwitchResponse(
+                    fedpro::SetInteractionRelevanceAdvisorySwitchResponse {},
+                )
+            },
+        ),
+        Req::GetConveyRegionDesignatorSetsSwitchRequest(_) => get_switch_bool(
+            ctx,
+            |s| s.convey_region_designator_sets,
+            |r| {
+                Resp::GetConveyRegionDesignatorSetsSwitchResponse(
+                    fedpro::GetConveyRegionDesignatorSetsSwitchResponse { result: r },
+                )
+            },
+        ),
+        Req::SetConveyRegionDesignatorSetsSwitchRequest(r) => set_switch_bool(
+            ctx,
+            r.value,
+            |s, v| s.convey_region_designator_sets = v,
+            || {
+                Resp::SetConveyRegionDesignatorSetsSwitchResponse(
+                    fedpro::SetConveyRegionDesignatorSetsSwitchResponse {},
+                )
+            },
+        ),
+        Req::GetServiceReportingSwitchRequest(_) => get_switch_bool(
+            ctx,
+            |s| s.service_reporting,
+            |r| {
+                Resp::GetServiceReportingSwitchResponse(fedpro::GetServiceReportingSwitchResponse {
+                    result: r,
+                })
+            },
+        ),
+        Req::SetServiceReportingSwitchRequest(r) => set_switch_bool(
+            ctx,
+            r.value,
+            |s, v| s.service_reporting = v,
+            || {
+                Resp::SetServiceReportingSwitchResponse(
+                    fedpro::SetServiceReportingSwitchResponse {},
+                )
+            },
+        ),
+        Req::GetExceptionReportingSwitchRequest(_) => get_switch_bool(
+            ctx,
+            |s| s.exception_reporting,
+            |r| {
+                Resp::GetExceptionReportingSwitchResponse(
+                    fedpro::GetExceptionReportingSwitchResponse { result: r },
+                )
+            },
+        ),
+        Req::SetExceptionReportingSwitchRequest(r) => set_switch_bool(
+            ctx,
+            r.value,
+            |s, v| s.exception_reporting = v,
+            || {
+                Resp::SetExceptionReportingSwitchResponse(
+                    fedpro::SetExceptionReportingSwitchResponse {},
+                )
+            },
+        ),
+        Req::GetSendServiceReportsToFileSwitchRequest(_) => get_switch_bool(
+            ctx,
+            |s| s.send_service_reports_to_file,
+            |r| {
+                Resp::GetSendServiceReportsToFileSwitchResponse(
+                    fedpro::GetSendServiceReportsToFileSwitchResponse { result: r },
+                )
+            },
+        ),
+        Req::SetSendServiceReportsToFileSwitchRequest(r) => set_switch_bool(
+            ctx,
+            r.value,
+            |s, v| s.send_service_reports_to_file = v,
+            || {
+                Resp::SetSendServiceReportsToFileSwitchResponse(
+                    fedpro::SetSendServiceReportsToFileSwitchResponse {},
+                )
+            },
+        ),
+        Req::GetAutoProvideSwitchRequest(_) => get_switch_bool(
+            ctx,
+            |s| s.auto_provide,
+            |r| {
+                Resp::GetAutoProvideSwitchResponse(fedpro::GetAutoProvideSwitchResponse {
+                    result: r,
+                })
+            },
+        ),
+        Req::GetDelaySubscriptionEvaluationSwitchRequest(_) => get_switch_bool(
+            ctx,
+            |s| s.delay_subscription_evaluation,
+            |r| {
+                Resp::GetDelaySubscriptionEvaluationSwitchResponse(
+                    fedpro::GetDelaySubscriptionEvaluationSwitchResponse { result: r },
+                )
+            },
+        ),
+        Req::GetAdvisoriesUseKnownClassSwitchRequest(_) => get_switch_bool(
+            ctx,
+            |s| s.advisories_use_known_class,
+            |r| {
+                Resp::GetAdvisoriesUseKnownClassSwitchResponse(
+                    fedpro::GetAdvisoriesUseKnownClassSwitchResponse { result: r },
+                )
+            },
+        ),
+        Req::GetAllowRelaxedDdmSwitchRequest(_) => get_switch_bool(
+            ctx,
+            |s| s.allow_relaxed_ddm,
+            |r| {
+                Resp::GetAllowRelaxedDdmSwitchResponse(fedpro::GetAllowRelaxedDdmSwitchResponse {
+                    result: r,
+                })
+            },
+        ),
+        Req::GetNonRegulatedGrantSwitchRequest(_) => get_switch_bool(
+            ctx,
+            |s| s.non_regulated_grant,
+            |r| {
+                Resp::GetNonRegulatedGrantSwitchResponse(
+                    fedpro::GetNonRegulatedGrantSwitchResponse { result: r },
+                )
+            },
+        ),
         Req::GetAutomaticResignDirectiveRequest(_) => get_automatic_resign_directive(ctx),
         Req::SetAutomaticResignDirectiveRequest(r) => set_automatic_resign_directive(ctx, r.value),
 
@@ -231,18 +378,14 @@ pub fn dispatch_call(
             // Accept any credentials for now — auth/authorization policy is a
             // separate concern (see threat model gap in mission-critical
             // checklist).
-            Resp::ConnectWithCredentialsResponse(
-                fedpro::ConnectWithCredentialsResponse {
-                    configuration_result: None,
-                },
-            )
+            Resp::ConnectWithCredentialsResponse(fedpro::ConnectWithCredentialsResponse {
+                configuration_result: None,
+            })
         }
         Req::ConnectWithConfigurationRequest(_) => {
-            Resp::ConnectWithConfigurationResponse(
-                fedpro::ConnectWithConfigurationResponse {
-                    configuration_result: None,
-                },
-            )
+            Resp::ConnectWithConfigurationResponse(fedpro::ConnectWithConfigurationResponse {
+                configuration_result: None,
+            })
         }
         Req::ConnectWithConfigurationAndCredentialsRequest(_) => {
             Resp::ConnectWithConfigurationAndCredentialsResponse(
@@ -251,17 +394,13 @@ pub fn dispatch_call(
                 },
             )
         }
-        Req::DisconnectRequest(_) => {
-            Resp::DisconnectResponse(fedpro::DisconnectResponse {})
-        }
+        Req::DisconnectRequest(_) => Resp::DisconnectResponse(fedpro::DisconnectResponse {}),
 
         // ---- Object instance lookup ----
         Req::GetObjectInstanceHandleRequest(r) => {
             get_object_instance_handle(ctx, &r.object_instance_name)
         }
-        Req::GetObjectInstanceNameRequest(r) => {
-            get_object_instance_name(ctx, r.object_instance)
-        }
+        Req::GetObjectInstanceNameRequest(r) => get_object_instance_name(ctx, r.object_instance),
         Req::GetKnownObjectClassHandleRequest(r) => {
             get_known_object_class_handle(ctx, r.object_instance)
         }
@@ -315,14 +454,11 @@ pub fn dispatch_call(
                         .values()
                         .map(|fs| (fs.name.clone(), fs.federate_type.clone()))
                         .collect();
-                    crate::routing::report_federation_execution_members(
-                        &federation_name,
-                        &members,
-                    )
+                    crate::routing::report_federation_execution_members(&federation_name, &members)
                 }
-                None => crate::routing::report_federation_execution_does_not_exist(
-                    &federation_name,
-                ),
+                None => {
+                    crate::routing::report_federation_execution_does_not_exist(&federation_name)
+                }
             };
             drop(federations);
             fan_out(&mut callbacks, &report_target, cb);
@@ -346,14 +482,12 @@ pub fn dispatch_call(
             }
             Resp::ListFederationExecutionsResponse(ListFederationExecutionsResponse {})
         }
-        Req::JoinFederationExecutionRequest(r) => {
-            match join(node, ctx, None, r.federation_name) {
-                Ok(jr) => Resp::JoinFederationExecutionResponse(JoinFederationExecutionResponse {
-                    result: Some(jr),
-                }),
-                Err(e) => e,
-            }
-        }
+        Req::JoinFederationExecutionRequest(r) => match join(node, ctx, None, r.federation_name) {
+            Ok(jr) => Resp::JoinFederationExecutionResponse(JoinFederationExecutionResponse {
+                result: Some(jr),
+            }),
+            Err(e) => e,
+        },
         Req::JoinFederationExecutionWithNameRequest(r) => {
             match join(node, ctx, Some(r.federate_name), r.federation_name) {
                 Ok(jr) => Resp::JoinFederationExecutionWithNameResponse(
@@ -413,16 +547,12 @@ pub fn dispatch_call(
         },
 
         // ---- Declaration Management ----
-        Req::PublishObjectClassAttributesRequest(r) => publish_object_class_attributes(
-            ctx,
-            r.object_class,
-            r.attributes,
-        ),
-        Req::UnpublishObjectClassAttributesRequest(r) => unpublish_object_class_attributes(
-            ctx,
-            r.object_class,
-            r.attributes,
-        ),
+        Req::PublishObjectClassAttributesRequest(r) => {
+            publish_object_class_attributes(ctx, r.object_class, r.attributes)
+        }
+        Req::UnpublishObjectClassAttributesRequest(r) => {
+            unpublish_object_class_attributes(ctx, r.object_class, r.attributes)
+        }
         Req::SubscribeObjectClassAttributesRequest(r) => subscribe_object_class_attributes_inner(
             ctx,
             r.object_class,
@@ -445,12 +575,9 @@ pub fn dispatch_call(
         Req::UnpublishInteractionClassRequest(r) => {
             unpublish_interaction_class(ctx, r.interaction_class)
         }
-        Req::SubscribeInteractionClassRequest(r) => subscribe_interaction_class_inner(
-            ctx,
-            r.interaction_class,
-            Some(node),
-            &mut callbacks,
-        ),
+        Req::SubscribeInteractionClassRequest(r) => {
+            subscribe_interaction_class_inner(ctx, r.interaction_class, Some(node), &mut callbacks)
+        }
         Req::UnsubscribeInteractionClassRequest(r) => unsubscribe_interaction_class_inner(
             ctx,
             r.interaction_class,
@@ -461,9 +588,11 @@ pub fn dispatch_call(
         // ---- Object Management ----
         Req::RegisterObjectInstanceRequest(r) => {
             match register_object_instance(node, ctx, &mut callbacks, r.object_class, None) {
-                Ok(handle) => Resp::RegisterObjectInstanceResponse(RegisterObjectInstanceResponse {
-                    result: Some(encode_object_instance(handle)),
-                }),
+                Ok(handle) => {
+                    Resp::RegisterObjectInstanceResponse(RegisterObjectInstanceResponse {
+                        result: Some(encode_object_instance(handle)),
+                    })
+                }
                 Err(e) => e,
             }
         }
@@ -537,13 +666,9 @@ pub fn dispatch_call(
         Req::IsAttributeOwnedByFederateRequest(r) => {
             is_attribute_owned_by_federate(ctx, r.object_instance, r.attribute)
         }
-        Req::QueryAttributeOwnershipRequest(r) => query_attribute_ownership(
-            node,
-            ctx,
-            &mut callbacks,
-            r.object_instance,
-            r.attributes,
-        ),
+        Req::QueryAttributeOwnershipRequest(r) => {
+            query_attribute_ownership(node, ctx, &mut callbacks, r.object_instance, r.attributes)
+        }
         Req::UnconditionalAttributeOwnershipDivestitureRequest(r) => {
             unconditional_attribute_ownership_divestiture(
                 node,
@@ -639,15 +764,11 @@ pub fn dispatch_call(
         Req::QueryFederationSaveStatusRequest(_) => {
             // Per spec, response is empty; status arrives via callback.
             // For MVP we just return the empty ack.
-            Resp::QueryFederationSaveStatusResponse(
-                fedpro::QueryFederationSaveStatusResponse {},
-            )
+            Resp::QueryFederationSaveStatusResponse(fedpro::QueryFederationSaveStatusResponse {})
         }
-        Req::QueryFederationRestoreStatusRequest(_) => {
-            Resp::QueryFederationRestoreStatusResponse(
-                fedpro::QueryFederationRestoreStatusResponse {},
-            )
-        }
+        Req::QueryFederationRestoreStatusRequest(_) => Resp::QueryFederationRestoreStatusResponse(
+            fedpro::QueryFederationRestoreStatusResponse {},
+        ),
 
         // ---- Federation Restore (MVP: orchestration; no on-disk state) ----
         Req::RequestFederationRestoreRequest(r) => {
@@ -662,16 +783,14 @@ pub fn dispatch_call(
         Req::AbortFederationRestoreRequest(_) => abort_federation_restore(ctx),
 
         // ---- Synchronization Points ----
-        Req::RegisterFederationSynchronizationPointRequest(r) => {
-            register_synchronization_point(
-                node,
-                ctx,
-                &mut callbacks,
-                r.synchronization_point_label,
-                r.user_supplied_tag,
-                None,
-            )
-        }
+        Req::RegisterFederationSynchronizationPointRequest(r) => register_synchronization_point(
+            node,
+            ctx,
+            &mut callbacks,
+            r.synchronization_point_label,
+            r.user_supplied_tag,
+            None,
+        ),
         Req::RegisterFederationSynchronizationPointWithSetRequest(r) => {
             let set: std::collections::HashSet<FederateHandle> = r
                 .synchronization_set
@@ -777,12 +896,8 @@ pub fn dispatch_call(
         Req::EnableTimeRegulationRequest(r) => {
             enable_time_regulation(node, ctx, &mut callbacks, r.lookahead)
         }
-        Req::DisableTimeRegulationRequest(_) => {
-            disable_time_regulation(node, ctx, &mut callbacks)
-        }
-        Req::EnableTimeConstrainedRequest(_) => {
-            enable_time_constrained(node, ctx, &mut callbacks)
-        }
+        Req::DisableTimeRegulationRequest(_) => disable_time_regulation(node, ctx, &mut callbacks),
+        Req::EnableTimeConstrainedRequest(_) => enable_time_constrained(node, ctx, &mut callbacks),
         Req::DisableTimeConstrainedRequest(_) => disable_time_constrained(ctx),
         Req::TimeAdvanceRequestRequest(r) => {
             time_advance_request(node, ctx, &mut callbacks, r.time)
@@ -805,17 +920,17 @@ pub fn dispatch_call(
         }
 
         // ---- Order + transportation per-attribute/interaction changes ----
-        Req::ChangeAttributeOrderTypeRequest(_) => Resp::ChangeAttributeOrderTypeResponse(
-            fedpro::ChangeAttributeOrderTypeResponse {},
-        ),
+        Req::ChangeAttributeOrderTypeRequest(_) => {
+            Resp::ChangeAttributeOrderTypeResponse(fedpro::ChangeAttributeOrderTypeResponse {})
+        }
         Req::ChangeDefaultAttributeOrderTypeRequest(_) => {
             Resp::ChangeDefaultAttributeOrderTypeResponse(
                 fedpro::ChangeDefaultAttributeOrderTypeResponse {},
             )
         }
-        Req::ChangeInteractionOrderTypeRequest(_) => Resp::ChangeInteractionOrderTypeResponse(
-            fedpro::ChangeInteractionOrderTypeResponse {},
-        ),
+        Req::ChangeInteractionOrderTypeRequest(_) => {
+            Resp::ChangeInteractionOrderTypeResponse(fedpro::ChangeInteractionOrderTypeResponse {})
+        }
         Req::RequestAttributeTransportationTypeChangeRequest(_) => {
             Resp::RequestAttributeTransportationTypeChangeResponse(
                 fedpro::RequestAttributeTransportationTypeChangeResponse {},
@@ -846,28 +961,31 @@ pub fn dispatch_call(
                 result: r.service_group as u32,
             })
         }
-        Req::NormalizeFederateHandleRequest(r) => Resp::NormalizeFederateHandleResponse(
-            fedpro::NormalizeFederateHandleResponse {
-                result: r.federate
+        Req::NormalizeFederateHandleRequest(r) => {
+            Resp::NormalizeFederateHandleResponse(fedpro::NormalizeFederateHandleResponse {
+                result: r
+                    .federate
                     .as_ref()
                     .filter(|h| h.data.len() == 4)
                     .map(|h| u32::from_be_bytes(h.data[..].try_into().unwrap()))
                     .unwrap_or(0),
-            },
-        ),
-        Req::NormalizeObjectClassHandleRequest(r) => Resp::NormalizeObjectClassHandleResponse(
-            fedpro::NormalizeObjectClassHandleResponse {
-                result: r.object_class
+            })
+        }
+        Req::NormalizeObjectClassHandleRequest(r) => {
+            Resp::NormalizeObjectClassHandleResponse(fedpro::NormalizeObjectClassHandleResponse {
+                result: r
+                    .object_class
                     .as_ref()
                     .filter(|h| h.data.len() == 4)
                     .map(|h| u32::from_be_bytes(h.data[..].try_into().unwrap()))
                     .unwrap_or(0),
-            },
-        ),
+            })
+        }
         Req::NormalizeInteractionClassHandleRequest(r) => {
             Resp::NormalizeInteractionClassHandleResponse(
                 fedpro::NormalizeInteractionClassHandleResponse {
-                    result: r.interaction_class
+                    result: r
+                        .interaction_class
                         .as_ref()
                         .filter(|h| h.data.len() == 4)
                         .map(|h| u32::from_be_bytes(h.data[..].try_into().unwrap()))
@@ -879,7 +997,8 @@ pub fn dispatch_call(
             Resp::NormalizeObjectInstanceHandleResponse(
                 fedpro::NormalizeObjectInstanceHandleResponse {
                     // ObjectInstanceHandle is u64 — truncate to u32 for normalize.
-                    result: r.object_instance
+                    result: r
+                        .object_instance
                         .as_ref()
                         .filter(|h| h.data.len() == 8)
                         .map(|h| u64::from_be_bytes(h.data[..].try_into().unwrap()) as u32)
@@ -889,9 +1008,9 @@ pub fn dispatch_call(
         }
 
         // ---- Update-rate queries ----
-        Req::GetUpdateRateValueRequest(_) => Resp::GetUpdateRateValueResponse(
-            fedpro::GetUpdateRateValueResponse { result: 0.0 },
-        ),
+        Req::GetUpdateRateValueRequest(_) => {
+            Resp::GetUpdateRateValueResponse(fedpro::GetUpdateRateValueResponse { result: 0.0 })
+        }
         Req::GetUpdateRateValueForAttributeRequest(_) => {
             Resp::GetUpdateRateValueForAttributeResponse(
                 fedpro::GetUpdateRateValueForAttributeResponse { result: 0.0 },
@@ -935,12 +1054,9 @@ pub fn dispatch_call(
                 &mut callbacks,
             )
         }
-        Req::SubscribeInteractionClassPassivelyRequest(r) => subscribe_interaction_class_inner(
-            ctx,
-            r.interaction_class,
-            Some(node),
-            &mut callbacks,
-        ),
+        Req::SubscribeInteractionClassPassivelyRequest(r) => {
+            subscribe_interaction_class_inner(ctx, r.interaction_class, Some(node), &mut callbacks)
+        }
         Req::SubscribeObjectClassAttributesWithRegionsAndRateRequest(r) => {
             let _ = r.attributes_and_regions;
             let _ = r.update_rate_designator;
@@ -975,30 +1091,30 @@ pub fn dispatch_call(
             }
         }
         Req::AssociateRegionsForUpdatesRequest(_) => {
-            Resp::AssociateRegionsForUpdatesResponse(
-                fedpro::AssociateRegionsForUpdatesResponse {},
-            )
+            Resp::AssociateRegionsForUpdatesResponse(fedpro::AssociateRegionsForUpdatesResponse {})
         }
-        Req::UnassociateRegionsForUpdatesRequest(_) => {
-            Resp::UnassociateRegionsForUpdatesResponse(
-                fedpro::UnassociateRegionsForUpdatesResponse {},
-            )
-        }
+        Req::UnassociateRegionsForUpdatesRequest(_) => Resp::UnassociateRegionsForUpdatesResponse(
+            fedpro::UnassociateRegionsForUpdatesResponse {},
+        ),
         Req::UnpublishObjectClassRequest(r) => {
             // Unpublish the entire class — equivalent to unpublishing all attributes.
             let m = match ctx.membership.as_ref() {
                 Some(m) => m.clone(),
-                None => return DispatchOutcome {
-                    response: exception("FederateNotExecutionMember", ""),
-                    callbacks,
-                },
+                None => {
+                    return DispatchOutcome {
+                        response: exception("FederateNotExecutionMember", ""),
+                        callbacks,
+                    };
+                }
             };
             let class = match r.object_class.and_then(|h| decode_object_class(&h).ok()) {
                 Some(h) => h,
-                None => return DispatchOutcome {
-                    response: exception("InvalidObjectClassHandle", ""),
-                    callbacks,
-                },
+                None => {
+                    return DispatchOutcome {
+                        response: exception("InvalidObjectClassHandle", ""),
+                        callbacks,
+                    };
+                }
             };
             let mut federates = m.federation.federates.write();
             if let Some(fs) = federates.get_mut(&m.federate_handle) {
@@ -1009,17 +1125,21 @@ pub fn dispatch_call(
         Req::UnsubscribeObjectClassRequest(r) => {
             let m = match ctx.membership.as_ref() {
                 Some(m) => m.clone(),
-                None => return DispatchOutcome {
-                    response: exception("FederateNotExecutionMember", ""),
-                    callbacks,
-                },
+                None => {
+                    return DispatchOutcome {
+                        response: exception("FederateNotExecutionMember", ""),
+                        callbacks,
+                    };
+                }
             };
             let class = match r.object_class.and_then(|h| decode_object_class(&h).ok()) {
                 Some(h) => h,
-                None => return DispatchOutcome {
-                    response: exception("InvalidObjectClassHandle", ""),
-                    callbacks,
-                },
+                None => {
+                    return DispatchOutcome {
+                        response: exception("InvalidObjectClassHandle", ""),
+                        callbacks,
+                    };
+                }
             };
             let mut federates = m.federation.federates.write();
             if let Some(fs) = federates.get_mut(&m.federate_handle) {
@@ -1035,18 +1155,16 @@ pub fn dispatch_call(
         Req::ReserveObjectInstanceNameRequest(_r) => {
             // MVP: reservation succeeds silently; the callback
             // ObjectInstanceNameReservationSucceeded should be sent. Deferred.
-            Resp::ReserveObjectInstanceNameResponse(
-                fedpro::ReserveObjectInstanceNameResponse {},
-            )
+            Resp::ReserveObjectInstanceNameResponse(fedpro::ReserveObjectInstanceNameResponse {})
         }
         Req::ReserveMultipleObjectInstanceNamesRequest(_r) => {
             Resp::ReserveMultipleObjectInstanceNamesResponse(
                 fedpro::ReserveMultipleObjectInstanceNamesResponse {},
             )
         }
-        Req::ReleaseObjectInstanceNameRequest(_r) => Resp::ReleaseObjectInstanceNameResponse(
-            fedpro::ReleaseObjectInstanceNameResponse {},
-        ),
+        Req::ReleaseObjectInstanceNameRequest(_r) => {
+            Resp::ReleaseObjectInstanceNameResponse(fedpro::ReleaseObjectInstanceNameResponse {})
+        }
         Req::ReleaseMultipleObjectInstanceNamesRequest(_r) => {
             Resp::ReleaseMultipleObjectInstanceNamesResponse(
                 fedpro::ReleaseMultipleObjectInstanceNamesResponse {},
@@ -1066,9 +1184,9 @@ pub fn dispatch_call(
         }
 
         // ---- Async-delivery toggle (TSO event delivery mode) ----
-        Req::EnableAsynchronousDeliveryRequest(_) => Resp::EnableAsynchronousDeliveryResponse(
-            fedpro::EnableAsynchronousDeliveryResponse {},
-        ),
+        Req::EnableAsynchronousDeliveryRequest(_) => {
+            Resp::EnableAsynchronousDeliveryResponse(fedpro::EnableAsynchronousDeliveryResponse {})
+        }
         Req::DisableAsynchronousDeliveryRequest(_) => Resp::DisableAsynchronousDeliveryResponse(
             fedpro::DisableAsynchronousDeliveryResponse {},
         ),
@@ -1091,51 +1209,41 @@ pub fn dispatch_call(
             use hla_fedpro_proto::fedpro::{QueryGaltResponse, TimeQueryReturn};
             let m = match ctx.membership.as_ref() {
                 Some(m) => m,
-                None => return DispatchOutcome {
-                    response: exception("FederateNotExecutionMember", ""),
-                    callbacks,
-                },
+                None => {
+                    return DispatchOutcome {
+                        response: exception("FederateNotExecutionMember", ""),
+                        callbacks,
+                    };
+                }
             };
             let lbts = crate::time::lbts(&m.federation);
             Resp::QueryGaltResponse(QueryGaltResponse {
                 result: Some(TimeQueryReturn {
                     logical_time_is_valid: lbts.is_finite(),
-                    logical_time: Some(encode_logical_time(if lbts.is_finite() { lbts } else { 0.0 })),
+                    logical_time: Some(encode_logical_time(if lbts.is_finite() {
+                        lbts
+                    } else {
+                        0.0
+                    })),
                 }),
             })
         }
 
         // ---- Directed interactions (object-targeted variants) ----
         Req::PublishObjectClassDirectedInteractionsRequest(r) => {
-            publish_object_class_directed_interactions(
-                ctx,
-                r.object_class,
-                r.interaction_classes,
-            )
+            publish_object_class_directed_interactions(ctx, r.object_class, r.interaction_classes)
         }
         Req::UnpublishObjectClassDirectedInteractionsRequest(r) => {
             unpublish_object_class_directed_interactions(ctx, r.object_class, None)
         }
         Req::UnpublishObjectClassDirectedInteractionsWithSetRequest(r) => {
-            unpublish_object_class_directed_interactions(
-                ctx,
-                r.object_class,
-                r.interaction_classes,
-            )
+            unpublish_object_class_directed_interactions(ctx, r.object_class, r.interaction_classes)
         }
         Req::SubscribeObjectClassDirectedInteractionsRequest(r) => {
-            subscribe_object_class_directed_interactions(
-                ctx,
-                r.object_class,
-                r.interaction_classes,
-            )
+            subscribe_object_class_directed_interactions(ctx, r.object_class, r.interaction_classes)
         }
         Req::SubscribeObjectClassDirectedInteractionsUniversallyRequest(r) => {
-            subscribe_object_class_directed_interactions(
-                ctx,
-                r.object_class,
-                r.interaction_classes,
-            )
+            subscribe_object_class_directed_interactions(ctx, r.object_class, r.interaction_classes)
         }
         Req::UnsubscribeObjectClassDirectedInteractionsRequest(r) => {
             unsubscribe_object_class_directed_interactions(ctx, r.object_class, None)
@@ -1344,7 +1452,7 @@ fn resign(ctx: &mut SessionContext) -> Resp {
 // Handle lookup
 // -----------------------------------------------------------------------------
 
-fn need_membership<'a>(ctx: &'a SessionContext) -> Result<&'a Membership, Resp> {
+fn need_membership(ctx: &SessionContext) -> Result<&Membership, Resp> {
     ctx.membership
         .as_ref()
         .ok_or_else(|| exception_variant("FederateNotExecutionMember", ""))
@@ -1363,10 +1471,7 @@ fn get_object_class_handle(ctx: &SessionContext, name: &str) -> Resp {
     }
 }
 
-fn get_object_class_name(
-    ctx: &SessionContext,
-    h: fedpro::ObjectClassHandle,
-) -> Resp {
+fn get_object_class_name(ctx: &SessionContext, h: fedpro::ObjectClassHandle) -> Resp {
     let m = match need_membership(ctx) {
         Ok(m) => m,
         Err(e) => return e,
@@ -1455,10 +1560,7 @@ fn get_interaction_class_handle(ctx: &SessionContext, name: &str) -> Resp {
     }
 }
 
-fn get_interaction_class_name(
-    ctx: &SessionContext,
-    h: fedpro::InteractionClassHandle,
-) -> Resp {
+fn get_interaction_class_name(ctx: &SessionContext, h: fedpro::InteractionClassHandle) -> Resp {
     let m = match need_membership(ctx) {
         Ok(m) => m,
         Err(e) => return e,
@@ -1536,17 +1638,14 @@ fn get_parameter_name(
 // Declaration Management
 // -----------------------------------------------------------------------------
 
-fn decode_handle_set(
-    set: Option<ProtoAttributeHandleSet>,
-) -> Result<AttributeHandleSet, Resp> {
+fn decode_handle_set(set: Option<ProtoAttributeHandleSet>) -> Result<AttributeHandleSet, Resp> {
     let mut out = AttributeHandleSet::new();
     let Some(set) = set else {
         return Ok(out);
     };
     for a in set.attribute_handle {
         out.insert(
-            decode_attribute(&a)
-                .map_err(|HandleError::Invalid(n)| exception_variant(n, ""))?,
+            decode_attribute(&a).map_err(|HandleError::Invalid(n)| exception_variant(n, ""))?,
         );
     }
     Ok(out)
@@ -1673,10 +1772,7 @@ fn class_has_subscribers(federation: &Federation, class: ObjectClassHandle) -> b
     subs.class_has_subscribers(class)
 }
 
-fn interaction_has_subscribers(
-    federation: &Federation,
-    class: InteractionClassHandle,
-) -> bool {
+fn interaction_has_subscribers(federation: &Federation, class: InteractionClassHandle) -> bool {
     let subs = federation.subscriptions.read();
     subs.by_interaction.contains_key(&class)
 }
@@ -1703,7 +1799,11 @@ fn emit_start_registration(
         return;
     }
     let conns = live_connections(node, federation, &targets);
-    fan_out(callbacks, &conns, start_registration_for_object_class(class));
+    fan_out(
+        callbacks,
+        &conns,
+        start_registration_for_object_class(class),
+    );
 }
 
 fn emit_stop_registration(
@@ -2116,8 +2216,8 @@ fn decode_attribute_value_map(
             .attribute_handle
             .as_ref()
             .ok_or_else(|| exception_variant("InvalidAttributeHandle", "missing handle"))?;
-        let h = decode_attribute(handle)
-            .map_err(|HandleError::Invalid(n)| exception_variant(n, ""))?;
+        let h =
+            decode_attribute(handle).map_err(|HandleError::Invalid(n)| exception_variant(n, ""))?;
         out.insert(h, entry.value);
     }
     Ok(out)
@@ -2135,8 +2235,8 @@ fn decode_parameter_value_map(
             .parameter_handle
             .as_ref()
             .ok_or_else(|| exception_variant("InvalidParameterHandle", "missing handle"))?;
-        let h = decode_parameter(handle)
-            .map_err(|HandleError::Invalid(n)| exception_variant(n, ""))?;
+        let h =
+            decode_parameter(handle).map_err(|HandleError::Invalid(n)| exception_variant(n, ""))?;
         out.insert(h, entry.value);
     }
     Ok(out)
@@ -2184,17 +2284,12 @@ fn update_attribute_values(
     };
 
     // Look up subscribers (excluding the producer) and fan out.
-    let mut subscribers = subscribers_for_attributes(
-        &m.federation,
-        class,
-        &attrs_list,
-        Some(m.federate_handle),
-    );
+    let mut subscribers =
+        subscribers_for_attributes(&m.federation, class, &attrs_list, Some(m.federate_handle));
 
     // DDM filter: intersect across all attributes — a subscriber must match
     // on at least one of the updated attributes to receive the reflection.
-    let mut matched: std::collections::HashSet<FederateHandle> =
-        std::collections::HashSet::new();
+    let mut matched: std::collections::HashSet<FederateHandle> = std::collections::HashSet::new();
     for attr in &attrs_list {
         let filtered = filter_subscribers_by_regions(
             &m.federation,
@@ -2335,12 +2430,8 @@ fn update_attribute_values_with_time(
         }
     }
 
-    let subscribers = subscribers_for_attributes(
-        &m.federation,
-        class,
-        &attrs_list,
-        Some(m.federate_handle),
-    );
+    let subscribers =
+        subscribers_for_attributes(&m.federation, class, &attrs_list, Some(m.federate_handle));
     notify_subscribers_of_registration_subset(
         node,
         &m.federation,
@@ -2371,8 +2462,7 @@ fn route_tso_or_immediate(
     time: f64,
     callback: fedpro::CallbackRequest,
 ) {
-    let mut immediate: std::collections::HashSet<FederateHandle> =
-        std::collections::HashSet::new();
+    let mut immediate: std::collections::HashSet<FederateHandle> = std::collections::HashSet::new();
     let mut queued: Vec<FederateHandle> = Vec::new();
     {
         let federates = federation.federates.read();
@@ -2485,9 +2575,7 @@ fn send_interaction_with_time(
     let subscribers = subscribers_for_interaction(&m.federation, class, Some(m.federate_handle));
     let callback = receive_interaction_with_time(class, &params, &tag, m.federate_handle, time);
     route_tso_or_immediate(node, &m.federation, callbacks, &subscribers, time, callback);
-    Resp::SendInteractionWithTimeResponse(SendInteractionWithTimeResponse {
-        result: None,
-    })
+    Resp::SendInteractionWithTimeResponse(SendInteractionWithTimeResponse { result: None })
 }
 
 fn delete_object_instance_with_time(
@@ -2725,7 +2813,11 @@ fn request_federation_restore(
 
     let requester_conn = live_connections(node, &m.federation, &single(m.federate_handle));
     if initiated {
-        fan_out(callbacks, &requester_conn, request_federation_restore_succeeded(&label));
+        fan_out(
+            callbacks,
+            &requester_conn,
+            request_federation_restore_succeeded(&label),
+        );
         let all_set: std::collections::HashSet<FederateHandle> =
             participants.iter().map(|(h, _)| *h).collect();
         let conns = live_connections(node, &m.federation, &all_set);
@@ -2734,10 +2826,18 @@ fn request_federation_restore(
         // Then per-federate InitiateFederateRestore.
         for (fh, name) in &participants {
             let conn = live_connections(node, &m.federation, &single(*fh));
-            fan_out(callbacks, &conn, initiate_federate_restore(&label, name, *fh));
+            fan_out(
+                callbacks,
+                &conn,
+                initiate_federate_restore(&label, name, *fh),
+            );
         }
     } else {
-        fan_out(callbacks, &requester_conn, request_federation_restore_failed(&label));
+        fan_out(
+            callbacks,
+            &requester_conn,
+            request_federation_restore_failed(&label),
+        );
     }
 
     Resp::RequestFederationRestoreResponse(RequestFederationRestoreResponse {})
@@ -3089,7 +3189,8 @@ fn unsubscribe_object_class_directed_interactions(
         match interactions {
             Some(set) => {
                 let to_remove = decode_interaction_class_set(Some(set));
-                if let Some(existing) = fs.pub_sub.subscribed_directed_interactions.get_mut(&class) {
+                if let Some(existing) = fs.pub_sub.subscribed_directed_interactions.get_mut(&class)
+                {
                     for ic in to_remove {
                         existing.remove(&ic);
                     }
@@ -3158,7 +3259,10 @@ fn send_directed_interaction(
             if fs.handle == m.federate_handle {
                 continue;
             }
-            if let Some(ix_set) = fs.pub_sub.subscribed_directed_interactions.get(&object_class)
+            if let Some(ix_set) = fs
+                .pub_sub
+                .subscribed_directed_interactions
+                .get(&object_class)
                 && ix_set.contains(&class)
             {
                 targets.insert(fs.handle);
@@ -3343,19 +3447,16 @@ fn commit_region_modifications(
     Resp::CommitRegionModificationsResponse(CommitRegionModificationsResponse {})
 }
 
-fn delete_region(
-    ctx: &SessionContext,
-    region: Option<fedpro::RegionHandle>,
-) -> Resp {
+fn delete_region(ctx: &SessionContext, region: Option<fedpro::RegionHandle>) -> Resp {
     use hla_fedpro_proto::fedpro::DeleteRegionResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
         None => return exception_variant("FederateNotExecutionMember", ""),
     };
     let rh = match region {
-        Some(h) if h.data.len() == 8 => hla_core::RegionHandle::new(u64::from_be_bytes(
-            h.data[..].try_into().unwrap(),
-        )),
+        Some(h) if h.data.len() == 8 => {
+            hla_core::RegionHandle::new(u64::from_be_bytes(h.data[..].try_into().unwrap()))
+        }
         _ => return exception_variant("InvalidRegion", ""),
     };
     let mut regions = m.federation.regions.write();
@@ -3380,15 +3481,15 @@ fn get_range_bounds(
         None => return exception_variant("FederateNotExecutionMember", ""),
     };
     let rh = match region {
-        Some(h) if h.data.len() == 8 => hla_core::RegionHandle::new(u64::from_be_bytes(
-            h.data[..].try_into().unwrap(),
-        )),
+        Some(h) if h.data.len() == 8 => {
+            hla_core::RegionHandle::new(u64::from_be_bytes(h.data[..].try_into().unwrap()))
+        }
         _ => return exception_variant("InvalidRegion", ""),
     };
     let dh = match dimension {
-        Some(h) if h.data.len() == 4 => hla_core::DimensionHandle::new(u32::from_be_bytes(
-            h.data[..].try_into().unwrap(),
-        )),
+        Some(h) if h.data.len() == 4 => {
+            hla_core::DimensionHandle::new(u32::from_be_bytes(h.data[..].try_into().unwrap()))
+        }
         _ => return exception_variant("InvalidDimension", ""),
     };
     let regions = m.federation.regions.read();
@@ -3417,15 +3518,15 @@ fn set_range_bounds(
         None => return exception_variant("FederateNotExecutionMember", ""),
     };
     let rh = match region {
-        Some(h) if h.data.len() == 8 => hla_core::RegionHandle::new(u64::from_be_bytes(
-            h.data[..].try_into().unwrap(),
-        )),
+        Some(h) if h.data.len() == 8 => {
+            hla_core::RegionHandle::new(u64::from_be_bytes(h.data[..].try_into().unwrap()))
+        }
         _ => return exception_variant("InvalidRegion", ""),
     };
     let dh = match dimension {
-        Some(h) if h.data.len() == 4 => hla_core::DimensionHandle::new(u32::from_be_bytes(
-            h.data[..].try_into().unwrap(),
-        )),
+        Some(h) if h.data.len() == 4 => {
+            hla_core::DimensionHandle::new(u32::from_be_bytes(h.data[..].try_into().unwrap()))
+        }
         _ => return exception_variant("InvalidDimension", ""),
     };
     let bounds = match bounds {
@@ -3500,11 +3601,9 @@ fn get_known_object_class_handle(
     };
     let instances = m.federation.object_instances.read();
     match instances.get(&h) {
-        Some(inst) => Resp::GetKnownObjectClassHandleResponse(
-            GetKnownObjectClassHandleResponse {
-                result: Some(crate::handles::encode_object_class(inst.class)),
-            },
-        ),
+        Some(inst) => Resp::GetKnownObjectClassHandleResponse(GetKnownObjectClassHandleResponse {
+            result: Some(crate::handles::encode_object_class(inst.class)),
+        }),
         None => exception_variant("ObjectInstanceNotKnown", ""),
     }
 }
@@ -3547,10 +3646,7 @@ fn get_dimension_handle(ctx: &SessionContext, name: &str) -> Resp {
     }
 }
 
-fn get_dimension_name(
-    ctx: &SessionContext,
-    dimension: Option<fedpro::DimensionHandle>,
-) -> Resp {
+fn get_dimension_name(ctx: &SessionContext, dimension: Option<fedpro::DimensionHandle>) -> Resp {
     use hla_fedpro_proto::fedpro::GetDimensionNameResponse;
     let _ = ctx;
     let h = match dimension {
@@ -3570,24 +3666,19 @@ fn get_dimension_upper_bound(
     use hla_fedpro_proto::fedpro::GetDimensionUpperBoundResponse;
     let _ = ctx;
     // FOM-defined upper bound; default u32::MAX for MVP.
-    Resp::GetDimensionUpperBoundResponse(GetDimensionUpperBoundResponse {
-        result: u32::MAX,
-    })
+    Resp::GetDimensionUpperBoundResponse(GetDimensionUpperBoundResponse { result: u32::MAX })
 }
 
-fn get_dimension_handle_set(
-    ctx: &SessionContext,
-    region: Option<fedpro::RegionHandle>,
-) -> Resp {
+fn get_dimension_handle_set(ctx: &SessionContext, region: Option<fedpro::RegionHandle>) -> Resp {
     use hla_fedpro_proto::fedpro::{DimensionHandleSet, GetDimensionHandleSetResponse};
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
         None => return exception_variant("FederateNotExecutionMember", ""),
     };
     let rh = match region {
-        Some(h) if h.data.len() == 8 => hla_core::RegionHandle::new(u64::from_be_bytes(
-            h.data[..].try_into().unwrap(),
-        )),
+        Some(h) if h.data.len() == 8 => {
+            hla_core::RegionHandle::new(u64::from_be_bytes(h.data[..].try_into().unwrap()))
+        }
         _ => return exception_variant("InvalidRegion", ""),
     };
     let regions = m.federation.regions.read();
@@ -3613,7 +3704,9 @@ fn get_available_dimensions_for_object_class(
     ctx: &SessionContext,
     _class: Option<fedpro::ObjectClassHandle>,
 ) -> Resp {
-    use hla_fedpro_proto::fedpro::{DimensionHandleSet, GetAvailableDimensionsForObjectClassResponse};
+    use hla_fedpro_proto::fedpro::{
+        DimensionHandleSet, GetAvailableDimensionsForObjectClassResponse,
+    };
     let _ = ctx;
     // MVP: we don't yet store per-class dimension associations. Empty set.
     Resp::GetAvailableDimensionsForObjectClassResponse(
@@ -3753,10 +3846,7 @@ fn get_federate_handle(ctx: &SessionContext, name: &str) -> Resp {
     }
 }
 
-fn get_federate_name(
-    ctx: &SessionContext,
-    handle: fedpro::FederateHandle,
-) -> Resp {
+fn get_federate_name(ctx: &SessionContext, handle: fedpro::FederateHandle) -> Resp {
     use hla_fedpro_proto::fedpro::GetFederateNameResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
@@ -3783,9 +3873,7 @@ fn get_order_type(name: &str) -> Resp {
         "TimeStamp" | "TimestampOrder" => 1i32,
         _ => return exception_variant("InvalidOrderName", name),
     };
-    Resp::GetOrderTypeResponse(GetOrderTypeResponse {
-        result: raw,
-    })
+    Resp::GetOrderTypeResponse(GetOrderTypeResponse { result: raw })
 }
 
 fn get_order_name(order_type: i32) -> Resp {
@@ -3850,9 +3938,8 @@ fn request_federation_save(
         return exception_variant("InvalidSaveLabel", "");
     }
 
-    let participants: Vec<FederateHandle> = {
-        m.federation.federates.read().keys().copied().collect()
-    };
+    let participants: Vec<FederateHandle> =
+        { m.federation.federates.read().keys().copied().collect() };
 
     {
         let mut current = m.federation.current_save.write();
@@ -3892,7 +3979,8 @@ fn federate_save_begun(ctx: &mut SessionContext) -> Resp {
     };
     match save.statuses.get(&m.federate_handle) {
         Some(SaveStatus::Initiated) => {
-            save.statuses.insert(m.federate_handle, SaveStatus::BegunSave);
+            save.statuses
+                .insert(m.federate_handle, SaveStatus::BegunSave);
             Resp::FederateSaveBegunResponse(FederateSaveBegunResponse {})
         }
         Some(_) => exception_variant("FederateNotInSaveInitiated", ""),
@@ -3906,9 +3994,7 @@ fn federate_save_progressed(
     callbacks: &mut Vec<OutboundCallback>,
     successfully: bool,
 ) -> Resp {
-    use hla_fedpro_proto::fedpro::{
-        FederateSaveCompleteResponse, FederateSaveNotCompleteResponse,
-    };
+    use hla_fedpro_proto::fedpro::{FederateSaveCompleteResponse, FederateSaveNotCompleteResponse};
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
         None => return exception_variant("FederateNotExecutionMember", ""),
@@ -3974,10 +4060,7 @@ fn federate_save_progressed(
 /// since the dispatch arm that called this already cleared it, we read
 /// from a side-channel: we tag the federation with `last_save_label` when
 /// save begins, and use that here.
-fn persist_federation_snapshot_on_success(
-    node: &Arc<RtiNode>,
-    federation: &Federation,
-) {
+fn persist_federation_snapshot_on_success(node: &Arc<RtiNode>, federation: &Federation) {
     let label = federation.last_save_label.read().clone();
     let Some(label) = label else { return };
     let dir = node.save_dir.read().clone();
@@ -4031,9 +4114,7 @@ fn is_attribute_owned_by_federate(
         None => return exception_variant("ObjectInstanceNotKnown", ""),
     };
     let owned = inst.attribute_owners.get(&attribute) == Some(&m.federate_handle);
-    Resp::IsAttributeOwnedByFederateResponse(IsAttributeOwnedByFederateResponse {
-        result: owned,
-    })
+    Resp::IsAttributeOwnedByFederateResponse(IsAttributeOwnedByFederateResponse { result: owned })
 }
 
 fn query_attribute_ownership(
@@ -4116,7 +4197,7 @@ fn attribute_ownership_acquisition_if_available(
         let mut unavailable = Vec::new();
         for a in &attrs {
             match inst.attribute_owners.get(a) {
-                Some(_) => unavailable.push(*a),       // already owned
+                Some(_) => unavailable.push(*a), // already owned
                 None => {
                     inst.attribute_owners.insert(*a, m.federate_handle);
                     secured.push(*a);
@@ -4201,8 +4282,7 @@ fn unconditional_attribute_ownership_divestiture(
             instances.get(&instance_h).map(|i| i.class)
         };
         if let Some(class) = class {
-            let subscribers =
-                subscribers_for_attributes(&m.federation, class, &divested, None);
+            let subscribers = subscribers_for_attributes(&m.federation, class, &divested, None);
             let conns = live_connections(node, &m.federation, &subscribers);
             fan_out(
                 callbacks,
@@ -4236,7 +4316,10 @@ fn register_synchronization_point(
         None => return exception_variant("FederateNotExecutionMember", ""),
     };
     if label.is_empty() {
-        return exception_variant("InvalidSynchronizationPointLabel", "label must not be empty");
+        return exception_variant(
+            "InvalidSynchronizationPointLabel",
+            "label must not be empty",
+        );
     }
 
     // Determine participants: explicit subset or all currently-joined federates.
@@ -4318,7 +4401,10 @@ fn synchronization_point_achieved(
         if !sp.participants.contains(&m.federate_handle) {
             return exception_variant(
                 "FederateNotInSynchronizationGroup",
-                &format!("federate {} not in sync set for {label}", m.federate_handle.raw()),
+                &format!(
+                    "federate {} not in sync set for {label}",
+                    m.federate_handle.raw()
+                ),
             );
         }
         sp.achieved.insert(m.federate_handle);
@@ -4506,7 +4592,13 @@ fn time_advance_request(
         drop(federates);
         // Drain TSO queue first, then deliver TAG. IEEE 1516.1 §8: TSO
         // messages with timestamp ≤ grant_time must arrive before the grant.
-        drain_tso_up_to(node, &m.federation, callbacks, m.federate_handle, grant_time);
+        drain_tso_up_to(
+            node,
+            &m.federation,
+            callbacks,
+            m.federate_handle,
+            grant_time,
+        );
         let connections = live_connections(node, &m.federation, &single(m.federate_handle));
         fan_out(callbacks, &connections, time_advance_grant(grant_time));
         try_grant_pending_advances_with_tso(node, &m.federation, callbacks);
@@ -4607,7 +4699,11 @@ fn query_lits(ctx: &SessionContext) -> Resp {
     Resp::QueryLitsResponse(QueryLitsResponse {
         result: Some(TimeQueryReturn {
             logical_time_is_valid: lbts.is_finite(),
-            logical_time: Some(encode_logical_time(if lbts.is_finite() { lbts } else { 0.0 })),
+            logical_time: Some(encode_logical_time(if lbts.is_finite() {
+                lbts
+            } else {
+                0.0
+            })),
         }),
     })
 }

@@ -82,7 +82,9 @@ fn parse_then_merge_single_module() {
     let root = fom.object_class_handle("HLAobjectRoot").unwrap();
     let food = fom.object_class_handle("HLAobjectRoot.Food").unwrap();
     let drink = fom.object_class_handle("HLAobjectRoot.Food.Drink").unwrap();
-    let soda = fom.object_class_handle("HLAobjectRoot.Food.Drink.Soda").unwrap();
+    let soda = fom
+        .object_class_handle("HLAobjectRoot.Food.Drink.Soda")
+        .unwrap();
     assert_eq!(root.raw(), 1);
     assert_eq!(food.raw(), 2);
     assert_eq!(drink.raw(), 3);
@@ -104,7 +106,9 @@ fn parse_then_merge_single_module() {
 #[test]
 fn inheritance_chain_walks_toward_root() {
     let fom = MergedFom::merge(vec![FomModule::parse(SUSHI_LITE).unwrap()]).unwrap();
-    let soda = fom.object_class_handle("HLAobjectRoot.Food.Drink.Soda").unwrap();
+    let soda = fom
+        .object_class_handle("HLAobjectRoot.Food.Drink.Soda")
+        .unwrap();
     let chain: Vec<u32> = fom.inheritance_chain(soda).map(|h| h.raw()).collect();
     let drink = fom.object_class_handle("HLAobjectRoot.Food.Drink").unwrap();
     let food = fom.object_class_handle("HLAobjectRoot.Food").unwrap();

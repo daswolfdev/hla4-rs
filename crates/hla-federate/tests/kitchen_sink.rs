@@ -160,17 +160,31 @@ async fn full_lifecycle_kitchen_sink() {
     // ---- Two federates: A (publisher + regulator), B (subscriber + constrained) ----
     let rec_a = Arc::new(Recorder::default());
     let rec_b = Arc::new(Recorder::default());
-    let a = RtiAmbassador::connect(&url, Arc::clone(&rec_a)).await.unwrap();
-    let b = RtiAmbassador::connect(&url, Arc::clone(&rec_b)).await.unwrap();
+    let a = RtiAmbassador::connect(&url, Arc::clone(&rec_a))
+        .await
+        .unwrap();
+    let b = RtiAmbassador::connect(&url, Arc::clone(&rec_b))
+        .await
+        .unwrap();
 
     a.create_federation_execution("kitchen").await.ok();
-    a.join_federation_execution("Producer", "kitchen").await.unwrap();
-    b.join_federation_execution("Consumer", "kitchen").await.unwrap();
+    a.join_federation_execution("Producer", "kitchen")
+        .await
+        .unwrap();
+    b.join_federation_execution("Consumer", "kitchen")
+        .await
+        .unwrap();
 
     // ---- Handle lookups ----
-    let sensor = a.get_object_class_handle("HLAobjectRoot.Sensor").await.unwrap();
+    let sensor = a
+        .get_object_class_handle("HLAobjectRoot.Sensor")
+        .await
+        .unwrap();
     let temp = a.get_attribute_handle(sensor, "Temp").await.unwrap();
-    let alarm = a.get_interaction_class_handle("HLAinteractionRoot.Alarm").await.unwrap();
+    let alarm = a
+        .get_interaction_class_handle("HLAinteractionRoot.Alarm")
+        .await
+        .unwrap();
     let level = a.get_parameter_handle(alarm, "Level").await.unwrap();
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(temp);
@@ -178,47 +192,68 @@ async fn full_lifecycle_kitchen_sink() {
     // ---- Time Management ----
     a.enable_time_regulation(1.0).await.unwrap();
     b.enable_time_constrained().await.unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        rec_a.time_regulation_enabled.load(Ordering::Relaxed)
-            && rec_b.time_constrained_enabled.load(Ordering::Relaxed)
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            rec_a.time_regulation_enabled.load(Ordering::Relaxed)
+                && rec_b.time_constrained_enabled.load(Ordering::Relaxed)
+        })
+        .await
+    );
 
     // ---- Pub/Sub + register + update ----
-    a.publish_object_class_attributes(sensor, attrs.clone()).await.unwrap();
+    a.publish_object_class_attributes(sensor, attrs.clone())
+        .await
+        .unwrap();
     a.publish_interaction_class(alarm).await.unwrap();
-    b.subscribe_object_class_attributes(sensor, attrs.clone()).await.unwrap();
+    b.subscribe_object_class_attributes(sensor, attrs.clone())
+        .await
+        .unwrap();
     b.subscribe_interaction_class(alarm).await.unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await; // settle sub
 
     let instance = a.register_object_instance(sensor).await.unwrap();
     let mut values = AttributeHandleValueMap::new();
     values.insert(temp, 21.5f64.to_be_bytes().to_vec());
-    a.update_attribute_values(instance, values, b"reading-1").await.unwrap();
+    a.update_attribute_values(instance, values, b"reading-1")
+        .await
+        .unwrap();
 
     let mut params = ParameterHandleValueMap::new();
     params.insert(level, 3i32.to_be_bytes().to_vec());
     a.send_interaction(alarm, params, b"alarm-1").await.unwrap();
 
-    assert!(wait_for(Duration::from_secs(1), || {
-        rec_b.discoveries.load(Ordering::Relaxed) >= 1
-            && rec_b.reflects.load(Ordering::Relaxed) >= 1
-            && rec_b.interactions.load(Ordering::Relaxed) >= 1
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            rec_b.discoveries.load(Ordering::Relaxed) >= 1
+                && rec_b.reflects.load(Ordering::Relaxed) >= 1
+                && rec_b.interactions.load(Ordering::Relaxed) >= 1
+        })
+        .await
+    );
 
     // ---- Sync point ----
-    a.register_federation_synchronization_point("RoundStart", b"").await.unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        rec_b.sync_announced.load(Ordering::Relaxed)
-    })
-    .await);
-    a.synchronization_point_achieved("RoundStart", true).await.unwrap();
-    b.synchronization_point_achieved("RoundStart", true).await.unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        rec_a.sync_completed.load(Ordering::Relaxed) && rec_b.sync_completed.load(Ordering::Relaxed)
-    })
-    .await);
+    a.register_federation_synchronization_point("RoundStart", b"")
+        .await
+        .unwrap();
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            rec_b.sync_announced.load(Ordering::Relaxed)
+        })
+        .await
+    );
+    a.synchronization_point_achieved("RoundStart", true)
+        .await
+        .unwrap();
+    b.synchronization_point_achieved("RoundStart", true)
+        .await
+        .unwrap();
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            rec_a.sync_completed.load(Ordering::Relaxed)
+                && rec_b.sync_completed.load(Ordering::Relaxed)
+        })
+        .await
+    );
 
     // ---- Federation save ----
     a.request_federation_save("snap").await.unwrap();
@@ -227,10 +262,12 @@ async fn full_lifecycle_kitchen_sink() {
     b.federate_save_begun().await.unwrap();
     a.federate_save_complete().await.unwrap();
     b.federate_save_complete().await.unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        rec_a.saved.load(Ordering::Relaxed) && rec_b.saved.load(Ordering::Relaxed)
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            rec_a.saved.load(Ordering::Relaxed) && rec_b.saved.load(Ordering::Relaxed)
+        })
+        .await
+    );
 
     // ---- Ownership: A divests, B acquires-if-available ----
     a.unconditional_attribute_ownership_divestiture(instance, attrs.clone(), b"")
@@ -239,15 +276,25 @@ async fn full_lifecycle_kitchen_sink() {
     b.attribute_ownership_acquisition_if_available(instance, attrs.clone(), b"")
         .await
         .unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        rec_b.ownership_acquired.load(Ordering::Relaxed)
-    })
-    .await);
-    assert!(b.is_attribute_owned_by_federate(instance, temp).await.unwrap());
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            rec_b.ownership_acquired.load(Ordering::Relaxed)
+        })
+        .await
+    );
+    assert!(
+        b.is_attribute_owned_by_federate(instance, temp)
+            .await
+            .unwrap()
+    );
 
     // ---- Clean resign + disconnect ----
-    a.resign_federation_execution(hla_core::ResignAction::DeleteObjects).await.unwrap();
-    b.resign_federation_execution(hla_core::ResignAction::DeleteObjects).await.unwrap();
+    a.resign_federation_execution(hla_core::ResignAction::DeleteObjects)
+        .await
+        .unwrap();
+    b.resign_federation_execution(hla_core::ResignAction::DeleteObjects)
+        .await
+        .unwrap();
     a.disconnect().await.unwrap();
     b.disconnect().await.unwrap();
 }

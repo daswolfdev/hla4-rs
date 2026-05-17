@@ -30,9 +30,7 @@ async fn rust_client_handshakes_with_rust_server() {
     tokio::time::sleep(Duration::from_millis(20)).await;
 
     let mut stream = TcpStream::connect(addr).await.expect("connect");
-    let ack = client_open_session(&mut stream)
-        .await
-        .expect("handshake");
+    let ack = client_open_session(&mut stream).await.expect("handshake");
 
     assert_eq!(ack.state, SessionState::Running);
     assert!(

@@ -138,12 +138,22 @@ async fn pub_sub_over_tls() {
 
     // ---- Subscriber over TLS ----
     let rec = Arc::new(Recorder::default());
-    let sub = RtiAmbassador::connect_tls(&url, Arc::clone(&client_cfg), server_name.clone(), Arc::clone(&rec))
+    let sub = RtiAmbassador::connect_tls(
+        &url,
+        Arc::clone(&client_cfg),
+        server_name.clone(),
+        Arc::clone(&rec),
+    )
+    .await
+    .unwrap();
+    sub.create_federation_execution("tls-fed").await.ok();
+    sub.join_federation_execution("Sub", "tls-fed")
         .await
         .unwrap();
-    sub.create_federation_execution("tls-fed").await.ok();
-    sub.join_federation_execution("Sub", "tls-fed").await.unwrap();
-    let drink = sub.get_object_class_handle("HLAobjectRoot.Drink").await.unwrap();
+    let drink = sub
+        .get_object_class_handle("HLAobjectRoot.Drink")
+        .await
+        .unwrap();
     let cups = sub.get_attribute_handle(drink, "NumberCups").await.unwrap();
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(cups);
@@ -161,7 +171,10 @@ async fn pub_sub_over_tls() {
     .await
     .unwrap();
     publisher.create_federation_execution("tls-fed").await.ok();
-    publisher.join_federation_execution("Pub", "tls-fed").await.unwrap();
+    publisher
+        .join_federation_execution("Pub", "tls-fed")
+        .await
+        .unwrap();
     publisher
         .publish_object_class_attributes(drink, attrs)
         .await

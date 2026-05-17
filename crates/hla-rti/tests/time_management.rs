@@ -55,7 +55,10 @@ fn encode(v: fedpro::call_request::CallRequest) -> Vec<u8> {
 }
 
 fn decode(b: &[u8]) -> fedpro::call_response::CallResponse {
-    fedpro::CallResponse::decode(b).unwrap().call_response.unwrap()
+    fedpro::CallResponse::decode(b)
+        .unwrap()
+        .call_response
+        .unwrap()
 }
 
 async fn join(addr: SocketAddr, federation: &str) -> (TcpStream, ClientSeqState) {
@@ -65,24 +68,28 @@ async fn join(addr: SocketAddr, federation: &str) -> (TcpStream, ClientSeqState)
     let _ = send_hla_call(
         &mut sock,
         &mut state,
-        encode(fedpro::call_request::CallRequest::CreateFederationExecutionRequest(
-            fedpro::CreateFederationExecutionRequest {
-                federation_name: federation.into(),
-                fom_module: None,
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::CreateFederationExecutionRequest(
+                fedpro::CreateFederationExecutionRequest {
+                    federation_name: federation.into(),
+                    fom_module: None,
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
     let _ = send_hla_call(
         &mut sock,
         &mut state,
-        encode(fedpro::call_request::CallRequest::JoinFederationExecutionRequest(
-            fedpro::JoinFederationExecutionRequest {
-                federate_type: "TM".into(),
-                federation_name: federation.into(),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::JoinFederationExecutionRequest(
+                fedpro::JoinFederationExecutionRequest {
+                    federate_type: "TM".into(),
+                    federation_name: federation.into(),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -131,11 +138,13 @@ async fn enable_time_regulation_grants_immediate_callback() {
     let resp = send_hla_call(
         &mut sock,
         &mut state,
-        encode(fedpro::call_request::CallRequest::EnableTimeRegulationRequest(
-            fedpro::EnableTimeRegulationRequest {
-                lookahead: Some(encode_lti(1.0)),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::EnableTimeRegulationRequest(
+                fedpro::EnableTimeRegulationRequest {
+                    lookahead: Some(encode_lti(1.0)),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -161,9 +170,11 @@ async fn enable_time_constrained_grants_immediate_callback() {
     let _ = send_hla_call(
         &mut sock,
         &mut state,
-        encode(fedpro::call_request::CallRequest::EnableTimeConstrainedRequest(
-            fedpro::EnableTimeConstrainedRequest {},
-        )),
+        encode(
+            fedpro::call_request::CallRequest::EnableTimeConstrainedRequest(
+                fedpro::EnableTimeConstrainedRequest {},
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -186,11 +197,13 @@ async fn unconstrained_advance_is_granted_immediately() {
     let _ = send_hla_call(
         &mut sock,
         &mut state,
-        encode(fedpro::call_request::CallRequest::TimeAdvanceRequestRequest(
-            fedpro::TimeAdvanceRequestRequest {
-                time: Some(encode_lt(5.0)),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::TimeAdvanceRequestRequest(
+                fedpro::TimeAdvanceRequestRequest {
+                    time: Some(encode_lt(5.0)),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -211,9 +224,11 @@ async fn constrained_with_no_regulator_advances_freely() {
     let _ = send_hla_call(
         &mut sock,
         &mut state,
-        encode(fedpro::call_request::CallRequest::EnableTimeConstrainedRequest(
-            fedpro::EnableTimeConstrainedRequest {},
-        )),
+        encode(
+            fedpro::call_request::CallRequest::EnableTimeConstrainedRequest(
+                fedpro::EnableTimeConstrainedRequest {},
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -222,11 +237,13 @@ async fn constrained_with_no_regulator_advances_freely() {
     let _ = send_hla_call(
         &mut sock,
         &mut state,
-        encode(fedpro::call_request::CallRequest::TimeAdvanceRequestRequest(
-            fedpro::TimeAdvanceRequestRequest {
-                time: Some(encode_lt(10.0)),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::TimeAdvanceRequestRequest(
+                fedpro::TimeAdvanceRequestRequest {
+                    time: Some(encode_lt(10.0)),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -249,11 +266,13 @@ async fn regulator_lookahead_blocks_constrained_until_advanced() {
     let _ = send_hla_call(
         &mut r_sock,
         &mut r_state,
-        encode(fedpro::call_request::CallRequest::EnableTimeRegulationRequest(
-            fedpro::EnableTimeRegulationRequest {
-                lookahead: Some(encode_lti(1.0)),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::EnableTimeRegulationRequest(
+                fedpro::EnableTimeRegulationRequest {
+                    lookahead: Some(encode_lti(1.0)),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -264,9 +283,11 @@ async fn regulator_lookahead_blocks_constrained_until_advanced() {
     let _ = send_hla_call(
         &mut c_sock,
         &mut c_state,
-        encode(fedpro::call_request::CallRequest::EnableTimeConstrainedRequest(
-            fedpro::EnableTimeConstrainedRequest {},
-        )),
+        encode(
+            fedpro::call_request::CallRequest::EnableTimeConstrainedRequest(
+                fedpro::EnableTimeConstrainedRequest {},
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -276,29 +297,35 @@ async fn regulator_lookahead_blocks_constrained_until_advanced() {
     let _ = send_hla_call(
         &mut c_sock,
         &mut c_state,
-        encode(fedpro::call_request::CallRequest::TimeAdvanceRequestRequest(
-            fedpro::TimeAdvanceRequestRequest {
-                time: Some(encode_lt(0.5)),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::TimeAdvanceRequestRequest(
+                fedpro::TimeAdvanceRequestRequest {
+                    time: Some(encode_lt(0.5)),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
     let cb = next_callback(&mut c_sock).await;
     assert!(matches!(
         cb.callback_request,
-        Some(fedpro::callback_request::CallbackRequest::TimeAdvanceGrant(_))
+        Some(fedpro::callback_request::CallbackRequest::TimeAdvanceGrant(
+            _
+        ))
     ));
 
     // C requests advance to 5.0 → blocked at LBTS=1.0 (no grant arrives)
     let _ = send_hla_call(
         &mut c_sock,
         &mut c_state,
-        encode(fedpro::call_request::CallRequest::TimeAdvanceRequestRequest(
-            fedpro::TimeAdvanceRequestRequest {
-                time: Some(encode_lt(5.0)),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::TimeAdvanceRequestRequest(
+                fedpro::TimeAdvanceRequestRequest {
+                    time: Some(encode_lt(5.0)),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -309,11 +336,13 @@ async fn regulator_lookahead_blocks_constrained_until_advanced() {
     let _ = send_hla_call(
         &mut r_sock,
         &mut r_state,
-        encode(fedpro::call_request::CallRequest::TimeAdvanceRequestRequest(
-            fedpro::TimeAdvanceRequestRequest {
-                time: Some(encode_lt(5.0)),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::TimeAdvanceRequestRequest(
+                fedpro::TimeAdvanceRequestRequest {
+                    time: Some(encode_lt(5.0)),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -321,7 +350,9 @@ async fn regulator_lookahead_blocks_constrained_until_advanced() {
     let r_cb = next_callback(&mut r_sock).await;
     assert!(matches!(
         r_cb.callback_request,
-        Some(fedpro::callback_request::CallbackRequest::TimeAdvanceGrant(_))
+        Some(fedpro::callback_request::CallbackRequest::TimeAdvanceGrant(
+            _
+        ))
     ));
     // C should now receive its previously-pending grant.
     let c_cb = next_callback(&mut c_sock).await;
@@ -342,11 +373,13 @@ async fn two_regulators_compute_min_lbts() {
     let _ = send_hla_call(
         &mut r1,
         &mut s1,
-        encode(fedpro::call_request::CallRequest::EnableTimeRegulationRequest(
-            fedpro::EnableTimeRegulationRequest {
-                lookahead: Some(encode_lti(2.0)),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::EnableTimeRegulationRequest(
+                fedpro::EnableTimeRegulationRequest {
+                    lookahead: Some(encode_lti(2.0)),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -357,11 +390,13 @@ async fn two_regulators_compute_min_lbts() {
     let _ = send_hla_call(
         &mut r2,
         &mut s2,
-        encode(fedpro::call_request::CallRequest::EnableTimeRegulationRequest(
-            fedpro::EnableTimeRegulationRequest {
-                lookahead: Some(encode_lti(0.5)),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::EnableTimeRegulationRequest(
+                fedpro::EnableTimeRegulationRequest {
+                    lookahead: Some(encode_lti(0.5)),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -372,9 +407,11 @@ async fn two_regulators_compute_min_lbts() {
     let _ = send_hla_call(
         &mut c,
         &mut cs,
-        encode(fedpro::call_request::CallRequest::EnableTimeConstrainedRequest(
-            fedpro::EnableTimeConstrainedRequest {},
-        )),
+        encode(
+            fedpro::call_request::CallRequest::EnableTimeConstrainedRequest(
+                fedpro::EnableTimeConstrainedRequest {},
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -383,29 +420,35 @@ async fn two_regulators_compute_min_lbts() {
     let _ = send_hla_call(
         &mut c,
         &mut cs,
-        encode(fedpro::call_request::CallRequest::TimeAdvanceRequestRequest(
-            fedpro::TimeAdvanceRequestRequest {
-                time: Some(encode_lt(0.5)),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::TimeAdvanceRequestRequest(
+                fedpro::TimeAdvanceRequestRequest {
+                    time: Some(encode_lt(0.5)),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
     let cb = next_callback(&mut c).await;
     assert!(matches!(
         cb.callback_request,
-        Some(fedpro::callback_request::CallbackRequest::TimeAdvanceGrant(_))
+        Some(fedpro::callback_request::CallbackRequest::TimeAdvanceGrant(
+            _
+        ))
     ));
 
     // Advance to 1.0 must block — limited by R2's smaller LBTS contribution.
     let _ = send_hla_call(
         &mut c,
         &mut cs,
-        encode(fedpro::call_request::CallRequest::TimeAdvanceRequestRequest(
-            fedpro::TimeAdvanceRequestRequest {
-                time: Some(encode_lt(1.0)),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::TimeAdvanceRequestRequest(
+                fedpro::TimeAdvanceRequestRequest {
+                    time: Some(encode_lt(1.0)),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -458,11 +501,13 @@ async fn query_logical_time_and_lookahead() {
     let _ = send_hla_call(
         &mut sock,
         &mut state,
-        encode(fedpro::call_request::CallRequest::EnableTimeRegulationRequest(
-            fedpro::EnableTimeRegulationRequest {
-                lookahead: Some(encode_lti(2.5)),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::EnableTimeRegulationRequest(
+                fedpro::EnableTimeRegulationRequest {
+                    lookahead: Some(encode_lti(2.5)),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -495,11 +540,13 @@ async fn double_enable_regulation_fails() {
     let _ = send_hla_call(
         &mut sock,
         &mut state,
-        encode(fedpro::call_request::CallRequest::EnableTimeRegulationRequest(
-            fedpro::EnableTimeRegulationRequest {
-                lookahead: Some(encode_lti(1.0)),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::EnableTimeRegulationRequest(
+                fedpro::EnableTimeRegulationRequest {
+                    lookahead: Some(encode_lti(1.0)),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -508,11 +555,13 @@ async fn double_enable_regulation_fails() {
     let resp = send_hla_call(
         &mut sock,
         &mut state,
-        encode(fedpro::call_request::CallRequest::EnableTimeRegulationRequest(
-            fedpro::EnableTimeRegulationRequest {
-                lookahead: Some(encode_lti(1.0)),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::EnableTimeRegulationRequest(
+                fedpro::EnableTimeRegulationRequest {
+                    lookahead: Some(encode_lti(1.0)),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();

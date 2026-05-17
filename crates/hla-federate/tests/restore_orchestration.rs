@@ -83,30 +83,38 @@ async fn restore_completes_when_all_done() {
     let r1 = Arc::new(Rec::default());
     let f1 = RtiAmbassador::connect(&url, Arc::clone(&r1)).await.unwrap();
     f1.create_federation_execution("rest-fed").await.ok();
-    f1.join_federation_execution("F1", "rest-fed").await.unwrap();
+    f1.join_federation_execution("F1", "rest-fed")
+        .await
+        .unwrap();
 
     let r2 = Arc::new(Rec::default());
     let f2 = RtiAmbassador::connect(&url, Arc::clone(&r2)).await.unwrap();
-    f2.join_federation_execution("F2", "rest-fed").await.unwrap();
+    f2.join_federation_execution("F2", "rest-fed")
+        .await
+        .unwrap();
 
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     f1.request_federation_restore("snap-1").await.unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        !r1.succeeded.lock().is_empty()
-            && r1.begun.load(Ordering::Relaxed)
-            && r2.begun.load(Ordering::Relaxed)
-            && !r1.initiate.lock().is_empty()
-            && !r2.initiate.lock().is_empty()
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            !r1.succeeded.lock().is_empty()
+                && r1.begun.load(Ordering::Relaxed)
+                && r2.begun.load(Ordering::Relaxed)
+                && !r1.initiate.lock().is_empty()
+                && !r2.initiate.lock().is_empty()
+        })
+        .await
+    );
 
     f1.federate_restore_complete().await.unwrap();
     f2.federate_restore_complete().await.unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        r1.restored.load(Ordering::Relaxed) && r2.restored.load(Ordering::Relaxed)
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            r1.restored.load(Ordering::Relaxed) && r2.restored.load(Ordering::Relaxed)
+        })
+        .await
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -117,24 +125,32 @@ async fn restore_reports_not_restored_on_any_failure() {
     let r1 = Arc::new(Rec::default());
     let f1 = RtiAmbassador::connect(&url, Arc::clone(&r1)).await.unwrap();
     f1.create_federation_execution("rest-fail").await.ok();
-    f1.join_federation_execution("F1", "rest-fail").await.unwrap();
+    f1.join_federation_execution("F1", "rest-fail")
+        .await
+        .unwrap();
 
     let r2 = Arc::new(Rec::default());
     let f2 = RtiAmbassador::connect(&url, Arc::clone(&r2)).await.unwrap();
-    f2.join_federation_execution("F2", "rest-fail").await.unwrap();
+    f2.join_federation_execution("F2", "rest-fail")
+        .await
+        .unwrap();
 
     tokio::time::sleep(Duration::from_millis(50)).await;
     f1.request_federation_restore("attempt").await.unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        !r1.succeeded.lock().is_empty()
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            !r1.succeeded.lock().is_empty()
+        })
+        .await
+    );
 
     f1.federate_restore_not_complete().await.unwrap();
     f2.federate_restore_complete().await.unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        r1.not_restored.load(Ordering::Relaxed) >= 1
-            && r2.not_restored.load(Ordering::Relaxed) >= 1
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            r1.not_restored.load(Ordering::Relaxed) >= 1
+                && r2.not_restored.load(Ordering::Relaxed) >= 1
+        })
+        .await
+    );
 }

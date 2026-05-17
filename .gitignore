@@ -1,6 +1,8 @@
 /target
 **/*.rs.bk
-Cargo.lock
+# Cargo.lock is committed: this workspace ships a binary (`rtiexec`),
+# and a committed lockfile is required for reproducible CI builds with
+# `--locked`. Per the Cargo book guidance for end-product binaries.
 .idea/
 .vscode/
 *.swp

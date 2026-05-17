@@ -9,8 +9,6 @@ pub mod ws;
 
 pub use call::{ClientSeqState, send_hla_call, terminate_session};
 pub use codec::{CodecError, MAX_PACKET_SIZE, read_frame, write_frame};
-pub use transport::{AsyncReadSource, AsyncWriteSink, FrameSink, FrameSource};
-pub use ws::{WsFrameSink, WsFrameSource, split_ws};
 pub use framing::{
     FEDERATE_PROTOCOL_VERSION, Frame, FrameError, HEADER_SIZE, HlaCallResponsePayload,
     HlaCallbackResponsePayload, INITIAL_SEQUENCE_NUMBER, MAX_SEQUENCE_NUMBER, MessageHeader,
@@ -23,3 +21,5 @@ pub use session::{
     client_open_session, client_open_session_frames, server_accept_session,
     server_accept_session_frames,
 };
+pub use transport::{AsyncReadSource, AsyncWriteSink, FrameSink, FrameSource};
+pub use ws::{WsFrameSink, WsFrameSource, split_ws};

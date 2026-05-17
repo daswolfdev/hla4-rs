@@ -52,21 +52,17 @@ where
                         "websocket closed",
                     ))
                 })?
-                .map_err(|e| {
-                    CodecError::Io(std::io::Error::other(format!("ws read: {e}")))
-                })?;
+                .map_err(|e| CodecError::Io(std::io::Error::other(format!("ws read: {e}"))))?;
             match msg {
                 Message::Binary(bytes) => {
                     // tungstenite 0.24 hands us `bytes::Bytes` already; slice
                     // out the payload without copying.
                     let bytes: bytes::Bytes = bytes.into();
                     if bytes.len() < crate::framing::HEADER_SIZE {
-                        return Err(CodecError::Frame(
-                            crate::framing::FrameError::Truncated {
-                                needed: crate::framing::HEADER_SIZE,
-                                had: bytes.len(),
-                            },
-                        ));
+                        return Err(CodecError::Frame(crate::framing::FrameError::Truncated {
+                            needed: crate::framing::HEADER_SIZE,
+                            had: bytes.len(),
+                        }));
                     }
                     let header = MessageHeader::decode(&bytes[..crate::framing::HEADER_SIZE])?;
                     let payload = bytes.slice(crate::framing::HEADER_SIZE..);
@@ -123,9 +119,7 @@ where
 
 /// Convenience: split a WebSocketStream into matched `FrameSource` and
 /// `FrameSink` halves.
-pub fn split_ws<S>(
-    ws: WebSocketStream<S>,
-) -> (WsFrameSource<S>, WsFrameSink<S>)
+pub fn split_ws<S>(ws: WebSocketStream<S>) -> (WsFrameSource<S>, WsFrameSink<S>)
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {

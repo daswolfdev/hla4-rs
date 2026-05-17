@@ -20,6 +20,6 @@ fn main() {
 
     let mut config = prost_build::Config::new();
     config
-        .compile_protos(&protos, &[proto_dir.clone()])
+        .compile_protos(&protos, std::slice::from_ref(&proto_dir))
         .expect("failed to compile FedPro protos");
 }

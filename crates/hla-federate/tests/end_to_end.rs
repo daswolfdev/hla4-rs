@@ -156,7 +156,10 @@ async fn full_pub_sub_via_federate_library() {
         .get_object_class_handle("HLAobjectRoot.Food.Drink")
         .await
         .unwrap();
-    let cups_attr = sub.get_attribute_handle(drink_class, "NumberCups").await.unwrap();
+    let cups_attr = sub
+        .get_attribute_handle(drink_class, "NumberCups")
+        .await
+        .unwrap();
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(cups_attr);
     sub.subscribe_object_class_attributes(drink_class, attrs.clone())
@@ -167,7 +170,10 @@ async fn full_pub_sub_via_federate_library() {
         .get_interaction_class_handle("HLAinteractionRoot.FoodServed")
         .await
         .unwrap();
-    let food_type_param = sub.get_parameter_handle(food_served, "FoodType").await.unwrap();
+    let food_type_param = sub
+        .get_parameter_handle(food_served, "FoodType")
+        .await
+        .unwrap();
     sub.subscribe_interaction_class(food_served).await.unwrap();
 
     // ---- Publisher ----
@@ -185,10 +191,16 @@ async fn full_pub_sub_via_federate_library() {
         .publish_object_class_attributes(drink_class, attrs)
         .await
         .unwrap();
-    publisher.publish_interaction_class(food_served).await.unwrap();
+    publisher
+        .publish_interaction_class(food_served)
+        .await
+        .unwrap();
 
     // Register + update.
-    let instance = publisher.register_object_instance(drink_class).await.unwrap();
+    let instance = publisher
+        .register_object_instance(drink_class)
+        .await
+        .unwrap();
     let mut values = AttributeHandleValueMap::new();
     values.insert(cups_attr, 42i32.to_be_bytes().to_vec());
     publisher
@@ -220,29 +232,32 @@ async fn full_pub_sub_via_federate_library() {
         recorder.interactions.lock().len()
     );
 
-    // Validate contents.
-    let discoveries = recorder.discoveries.lock();
-    assert_eq!(discoveries.len(), 1);
-    assert_eq!(discoveries[0].0, instance);
-    assert_eq!(discoveries[0].1, drink_class);
-    drop(discoveries);
-
-    let reflects = recorder.reflects.lock();
-    assert_eq!(reflects.len(), 1);
-    assert_eq!(reflects[0].0, instance);
-    assert_eq!(reflects[0].1.get(&cups_attr).unwrap(), &42i32.to_be_bytes());
-    assert_eq!(reflects[0].2, b"first-pour");
-    drop(reflects);
-
-    let interactions = recorder.interactions.lock();
-    assert_eq!(interactions.len(), 1);
-    assert_eq!(interactions[0].0, food_served);
-    assert_eq!(
-        interactions[0].1.get(&food_type_param).unwrap(),
-        &b"sushi".to_vec()
-    );
-    assert_eq!(interactions[0].2, b"order-1");
-    drop(interactions);
+    // Validate contents. Each lock is scoped to a bare block so the guard's
+    // lifetime ends before any subsequent `.await` — keeps the
+    // `await_holding_lock` lint sound without a function-level allow.
+    {
+        let discoveries = recorder.discoveries.lock();
+        assert_eq!(discoveries.len(), 1);
+        assert_eq!(discoveries[0].0, instance);
+        assert_eq!(discoveries[0].1, drink_class);
+    }
+    {
+        let reflects = recorder.reflects.lock();
+        assert_eq!(reflects.len(), 1);
+        assert_eq!(reflects[0].0, instance);
+        assert_eq!(reflects[0].1.get(&cups_attr).unwrap(), &42i32.to_be_bytes());
+        assert_eq!(reflects[0].2, b"first-pour");
+    }
+    {
+        let interactions = recorder.interactions.lock();
+        assert_eq!(interactions.len(), 1);
+        assert_eq!(interactions[0].0, food_served);
+        assert_eq!(
+            interactions[0].1.get(&food_type_param).unwrap(),
+            &b"sushi".to_vec()
+        );
+        assert_eq!(interactions[0].2, b"order-1");
+    }
 
     // Delete + verify remove callback.
     publisher
@@ -250,7 +265,7 @@ async fn full_pub_sub_via_federate_library() {
         .await
         .unwrap();
     let removed = wait_for(Duration::from_secs(1), || {
-        recorder.removes.lock().len() >= 1
+        !recorder.removes.lock().is_empty()
     })
     .await;
     assert!(removed, "remove callback never arrived");
@@ -297,12 +312,16 @@ async fn time_management_via_federate_library() {
         .await
         .unwrap();
     reg.create_federation_execution("tm-e2e").await.ok();
-    reg.join_federation_execution("Regulator", "tm-e2e").await.unwrap();
+    reg.join_federation_execution("Regulator", "tm-e2e")
+        .await
+        .unwrap();
     reg.enable_time_regulation(1.0).await.unwrap();
-    assert!(wait_for(Duration::from_millis(500), || {
-        r1.regulation_enabled_at.lock().is_some()
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_millis(500), || {
+            r1.regulation_enabled_at.lock().is_some()
+        })
+        .await
+    );
     assert_eq!(*r1.regulation_enabled_at.lock(), Some(0.0));
 
     let r2 = Arc::new(TimeRec::default());
@@ -310,19 +329,25 @@ async fn time_management_via_federate_library() {
         .await
         .unwrap();
     con.create_federation_execution("tm-e2e").await.ok();
-    con.join_federation_execution("Constrained", "tm-e2e").await.unwrap();
+    con.join_federation_execution("Constrained", "tm-e2e")
+        .await
+        .unwrap();
     con.enable_time_constrained().await.unwrap();
-    assert!(wait_for(Duration::from_millis(500), || {
-        r2.constrained_enabled_at.lock().is_some()
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_millis(500), || {
+            r2.constrained_enabled_at.lock().is_some()
+        })
+        .await
+    );
 
     // Constrained TAR to 0.5 — LBTS=1.0 so should grant immediately.
     con.time_advance_request(0.5).await.unwrap();
-    assert!(wait_for(Duration::from_millis(500), || {
-        !r2.grants.lock().is_empty()
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_millis(500), || {
+            !r2.grants.lock().is_empty()
+        })
+        .await
+    );
     assert_eq!(r2.grants.lock()[0], 0.5);
 
     reg.disconnect().await.unwrap();

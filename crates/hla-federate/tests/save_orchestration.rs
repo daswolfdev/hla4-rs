@@ -71,20 +71,26 @@ async fn save_completes_when_all_federates_report_done() {
     let r1 = Arc::new(SaveRec::default());
     let f1 = RtiAmbassador::connect(&url, Arc::clone(&r1)).await.unwrap();
     f1.create_federation_execution("save-fed").await.ok();
-    f1.join_federation_execution("F1", "save-fed").await.unwrap();
+    f1.join_federation_execution("F1", "save-fed")
+        .await
+        .unwrap();
 
     let r2 = Arc::new(SaveRec::default());
     let f2 = RtiAmbassador::connect(&url, Arc::clone(&r2)).await.unwrap();
-    f2.join_federation_execution("F2", "save-fed").await.unwrap();
+    f2.join_federation_execution("F2", "save-fed")
+        .await
+        .unwrap();
 
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     f1.request_federation_save("snapshot-1").await.unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        r1.initiate_count.load(Ordering::Relaxed) >= 1
-            && r2.initiate_count.load(Ordering::Relaxed) >= 1
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            r1.initiate_count.load(Ordering::Relaxed) >= 1
+                && r2.initiate_count.load(Ordering::Relaxed) >= 1
+        })
+        .await
+    );
     assert_eq!(*r1.initiate_label.lock(), Some("snapshot-1".into()));
 
     f1.federate_save_begun().await.unwrap();
@@ -95,10 +101,12 @@ async fn save_completes_when_all_federates_report_done() {
     assert!(!r1.saved.load(Ordering::Relaxed));
 
     f2.federate_save_complete().await.unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        r1.saved.load(Ordering::Relaxed) && r2.saved.load(Ordering::Relaxed)
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            r1.saved.load(Ordering::Relaxed) && r2.saved.load(Ordering::Relaxed)
+        })
+        .await
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -109,29 +117,37 @@ async fn save_reports_not_saved_when_any_federate_fails() {
     let r1 = Arc::new(SaveRec::default());
     let f1 = RtiAmbassador::connect(&url, Arc::clone(&r1)).await.unwrap();
     f1.create_federation_execution("fail-fed").await.ok();
-    f1.join_federation_execution("F1", "fail-fed").await.unwrap();
+    f1.join_federation_execution("F1", "fail-fed")
+        .await
+        .unwrap();
 
     let r2 = Arc::new(SaveRec::default());
     let f2 = RtiAmbassador::connect(&url, Arc::clone(&r2)).await.unwrap();
-    f2.join_federation_execution("F2", "fail-fed").await.unwrap();
+    f2.join_federation_execution("F2", "fail-fed")
+        .await
+        .unwrap();
 
     tokio::time::sleep(Duration::from_millis(50)).await;
     f1.request_federation_save("attempt").await.unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        r1.initiate_count.load(Ordering::Relaxed) >= 1
-            && r2.initiate_count.load(Ordering::Relaxed) >= 1
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            r1.initiate_count.load(Ordering::Relaxed) >= 1
+                && r2.initiate_count.load(Ordering::Relaxed) >= 1
+        })
+        .await
+    );
 
     f1.federate_save_begun().await.unwrap();
     f2.federate_save_begun().await.unwrap();
     f1.federate_save_not_complete().await.unwrap();
     f2.federate_save_complete().await.unwrap();
 
-    assert!(wait_for(Duration::from_secs(1), || {
-        r1.not_saved.load(Ordering::Relaxed) >= 1 && r2.not_saved.load(Ordering::Relaxed) >= 1
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            r1.not_saved.load(Ordering::Relaxed) >= 1 && r2.not_saved.load(Ordering::Relaxed) >= 1
+        })
+        .await
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -141,7 +157,9 @@ async fn second_save_while_first_in_progress_returns_save_in_progress() {
     let r1 = Arc::new(SaveRec::default());
     let f1 = RtiAmbassador::connect(&url, Arc::clone(&r1)).await.unwrap();
     f1.create_federation_execution("dup-save").await.ok();
-    f1.join_federation_execution("F1", "dup-save").await.unwrap();
+    f1.join_federation_execution("F1", "dup-save")
+        .await
+        .unwrap();
 
     f1.request_federation_save("first").await.unwrap();
     let err = f1.request_federation_save("second").await.unwrap_err();

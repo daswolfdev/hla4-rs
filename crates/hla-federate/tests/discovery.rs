@@ -33,10 +33,12 @@ async fn boot() -> SocketAddr {
     addr
 }
 
+type FederationMembersSnapshot = Vec<(String, Vec<(String, String)>)>;
+
 #[derive(Default)]
 struct DiscoveryRec {
     list: Mutex<Vec<Vec<String>>>,
-    members: Mutex<Vec<(String, Vec<(String, String)>)>>,
+    members: Mutex<FederationMembersSnapshot>,
     does_not_exist: AtomicU32,
 }
 
@@ -73,7 +75,9 @@ async fn list_federation_executions_callback_carries_names() {
     let url = format!("rti://{addr}");
 
     let rec = Arc::new(DiscoveryRec::default());
-    let amb = RtiAmbassador::connect(&url, Arc::clone(&rec)).await.unwrap();
+    let amb = RtiAmbassador::connect(&url, Arc::clone(&rec))
+        .await
+        .unwrap();
     amb.create_federation_execution("fed-a").await.unwrap();
     amb.create_federation_execution("fed-b").await.unwrap();
 
@@ -92,13 +96,21 @@ async fn list_federation_execution_members_carries_federates() {
 
     // Two federates join the same federation.
     let rec_a = Arc::new(DiscoveryRec::default());
-    let a = RtiAmbassador::connect(&url, Arc::clone(&rec_a)).await.unwrap();
+    let a = RtiAmbassador::connect(&url, Arc::clone(&rec_a))
+        .await
+        .unwrap();
     a.create_federation_execution("mfed").await.unwrap();
-    a.join_federation_execution("Producer", "mfed").await.unwrap();
+    a.join_federation_execution("Producer", "mfed")
+        .await
+        .unwrap();
 
     let rec_b = Arc::new(DiscoveryRec::default());
-    let b = RtiAmbassador::connect(&url, Arc::clone(&rec_b)).await.unwrap();
-    b.join_federation_execution("Consumer", "mfed").await.unwrap();
+    let b = RtiAmbassador::connect(&url, Arc::clone(&rec_b))
+        .await
+        .unwrap();
+    b.join_federation_execution("Consumer", "mfed")
+        .await
+        .unwrap();
 
     // Settle so the federates table is observed in both joins.
     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -115,10 +127,14 @@ async fn list_members_for_nonexistent_federation_delivers_does_not_exist() {
     let addr = boot().await;
     let url = format!("rti://{addr}");
     let rec = Arc::new(DiscoveryRec::default());
-    let amb = RtiAmbassador::connect(&url, Arc::clone(&rec)).await.unwrap();
+    let amb = RtiAmbassador::connect(&url, Arc::clone(&rec))
+        .await
+        .unwrap();
     amb.list_federation_execution_members("nope").await.unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        rec.does_not_exist.load(Ordering::Relaxed) >= 1
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            rec.does_not_exist.load(Ordering::Relaxed) >= 1
+        })
+        .await
+    );
 }

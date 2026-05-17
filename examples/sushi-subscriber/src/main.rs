@@ -78,17 +78,19 @@ impl FederateAmbassador for Logger {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
 
     let args = Args::parse();
     let amb = RtiAmbassador::connect(&args.rti, Arc::new(Logger)).await?;
     let _ = amb.create_federation_execution(&args.federation).await;
-    amb.join_federation_execution(&args.name, &args.federation).await?;
+    amb.join_federation_execution(&args.name, &args.federation)
+        .await?;
 
-    let drink = amb.get_object_class_handle("HLAobjectRoot.Food.Drink").await?;
+    let drink = amb
+        .get_object_class_handle("HLAobjectRoot.Food.Drink")
+        .await?;
     let cups = amb.get_attribute_handle(drink, "NumberCups").await?;
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(cups);
@@ -96,7 +98,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("subscribed; awaiting callbacks (Ctrl-C to stop)");
 
     tokio::signal::ctrl_c().await?;
-    amb.resign_federation_execution(ResignAction::NoAction).await?;
+    amb.resign_federation_execution(ResignAction::NoAction)
+        .await?;
     amb.disconnect().await?;
     Ok(())
 }

@@ -54,7 +54,10 @@ fn encode(v: fedpro::call_request::CallRequest) -> Vec<u8> {
 }
 
 fn decode(b: &[u8]) -> fedpro::call_response::CallResponse {
-    fedpro::CallResponse::decode(b).unwrap().call_response.unwrap()
+    fedpro::CallResponse::decode(b)
+        .unwrap()
+        .call_response
+        .unwrap()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -67,16 +70,34 @@ async fn resume_after_drop_within_window_preserves_membership() {
     let session_id = ack.session_id;
     let mut state = ClientSeqState::new(session_id);
 
-    send_hla_call(&mut sock1, &mut state,
-        encode(fedpro::call_request::CallRequest::CreateFederationExecutionRequest(
-            fedpro::CreateFederationExecutionRequest {
-                federation_name: "resume-fed".into(), fom_module: None,
-            }))).await.unwrap();
-    send_hla_call(&mut sock1, &mut state,
-        encode(fedpro::call_request::CallRequest::JoinFederationExecutionRequest(
-            fedpro::JoinFederationExecutionRequest {
-                federate_type: "Resumer".into(), federation_name: "resume-fed".into(),
-            }))).await.unwrap();
+    send_hla_call(
+        &mut sock1,
+        &mut state,
+        encode(
+            fedpro::call_request::CallRequest::CreateFederationExecutionRequest(
+                fedpro::CreateFederationExecutionRequest {
+                    federation_name: "resume-fed".into(),
+                    fom_module: None,
+                },
+            ),
+        ),
+    )
+    .await
+    .unwrap();
+    send_hla_call(
+        &mut sock1,
+        &mut state,
+        encode(
+            fedpro::call_request::CallRequest::JoinFederationExecutionRequest(
+                fedpro::JoinFederationExecutionRequest {
+                    federate_type: "Resumer".into(),
+                    federation_name: "resume-fed".into(),
+                },
+            ),
+        ),
+    )
+    .await
+    .unwrap();
 
     // Federation should have one federate.
     {
@@ -95,7 +116,11 @@ async fn resume_after_drop_within_window_preserves_membership() {
     {
         let feds = node.federations.read();
         let f = feds.get("resume-fed").unwrap();
-        assert_eq!(f.federates.read().len(), 1, "federate should still be joined");
+        assert_eq!(
+            f.federates.read().len(),
+            1,
+            "federate should still be joined"
+        );
     }
 
     // Reconnect and resume.
@@ -121,9 +146,11 @@ async fn resume_after_drop_within_window_preserves_membership() {
     let resp = send_hla_call(
         &mut sock2,
         &mut state2,
-        encode(fedpro::call_request::CallRequest::ResignFederationExecutionRequest(
-            fedpro::ResignFederationExecutionRequest { resign_action: 0 },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::ResignFederationExecutionRequest(
+                fedpro::ResignFederationExecutionRequest { resign_action: 0 },
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -142,16 +169,34 @@ async fn resume_after_expiry_returns_failure() {
     let session_id = ack.session_id;
     let mut state = ClientSeqState::new(session_id);
 
-    send_hla_call(&mut sock1, &mut state,
-        encode(fedpro::call_request::CallRequest::CreateFederationExecutionRequest(
-            fedpro::CreateFederationExecutionRequest {
-                federation_name: "expire-fed".into(), fom_module: None,
-            }))).await.unwrap();
-    send_hla_call(&mut sock1, &mut state,
-        encode(fedpro::call_request::CallRequest::JoinFederationExecutionRequest(
-            fedpro::JoinFederationExecutionRequest {
-                federate_type: "X".into(), federation_name: "expire-fed".into(),
-            }))).await.unwrap();
+    send_hla_call(
+        &mut sock1,
+        &mut state,
+        encode(
+            fedpro::call_request::CallRequest::CreateFederationExecutionRequest(
+                fedpro::CreateFederationExecutionRequest {
+                    federation_name: "expire-fed".into(),
+                    fom_module: None,
+                },
+            ),
+        ),
+    )
+    .await
+    .unwrap();
+    send_hla_call(
+        &mut sock1,
+        &mut state,
+        encode(
+            fedpro::call_request::CallRequest::JoinFederationExecutionRequest(
+                fedpro::JoinFederationExecutionRequest {
+                    federate_type: "X".into(),
+                    federation_name: "expire-fed".into(),
+                },
+            ),
+        ),
+    )
+    .await
+    .unwrap();
 
     drop(sock1);
     // Wait past reconnect_window so the janitor expires the session.
@@ -175,16 +220,34 @@ async fn zero_window_skips_suspension_for_compat() {
     let ack = client_open_session(&mut sock).await.unwrap();
     let mut state = ClientSeqState::new(ack.session_id);
 
-    send_hla_call(&mut sock, &mut state,
-        encode(fedpro::call_request::CallRequest::CreateFederationExecutionRequest(
-            fedpro::CreateFederationExecutionRequest {
-                federation_name: "zero-win".into(), fom_module: None,
-            }))).await.unwrap();
-    send_hla_call(&mut sock, &mut state,
-        encode(fedpro::call_request::CallRequest::JoinFederationExecutionRequest(
-            fedpro::JoinFederationExecutionRequest {
-                federate_type: "X".into(), federation_name: "zero-win".into(),
-            }))).await.unwrap();
+    send_hla_call(
+        &mut sock,
+        &mut state,
+        encode(
+            fedpro::call_request::CallRequest::CreateFederationExecutionRequest(
+                fedpro::CreateFederationExecutionRequest {
+                    federation_name: "zero-win".into(),
+                    fom_module: None,
+                },
+            ),
+        ),
+    )
+    .await
+    .unwrap();
+    send_hla_call(
+        &mut sock,
+        &mut state,
+        encode(
+            fedpro::call_request::CallRequest::JoinFederationExecutionRequest(
+                fedpro::JoinFederationExecutionRequest {
+                    federate_type: "X".into(),
+                    federation_name: "zero-win".into(),
+                },
+            ),
+        ),
+    )
+    .await
+    .unwrap();
     drop(sock);
     tokio::time::sleep(Duration::from_millis(100)).await;
     // No suspension; federate has been auto-resigned. Destroy succeeds.
@@ -196,9 +259,19 @@ async fn zero_window_skips_suspension_for_compat() {
     let mut admin = TcpStream::connect(addr).await.unwrap();
     let ack2 = client_open_session(&mut admin).await.unwrap();
     s.session_id = ack2.session_id;
-    let resp = send_hla_call(&mut admin, &mut s,
-        encode(fedpro::call_request::CallRequest::DestroyFederationExecutionRequest(
-            fedpro::DestroyFederationExecutionRequest { federation_name: "zero-win".into() }))).await.unwrap();
+    let resp = send_hla_call(
+        &mut admin,
+        &mut s,
+        encode(
+            fedpro::call_request::CallRequest::DestroyFederationExecutionRequest(
+                fedpro::DestroyFederationExecutionRequest {
+                    federation_name: "zero-win".into(),
+                },
+            ),
+        ),
+    )
+    .await
+    .unwrap();
     assert!(matches!(
         decode(&resp),
         fedpro::call_response::CallResponse::DestroyFederationExecutionResponse(_)

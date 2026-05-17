@@ -143,7 +143,6 @@ where
 fn parse_new_session_status(
     response: crate::framing::Frame,
 ) -> Result<NewSessionAck, SessionError> {
-
     if response.header.message_type != MessageType::CtrlNewSessionStatus {
         return Err(SessionError::UnexpectedMessageType {
             got: response.header.message_type,
@@ -303,10 +302,7 @@ mod tests {
         let (mut client, mut server) = duplex(1024);
         let server_task = tokio::spawn(async move {
             let err = server_accept_session(&mut server, 1).await.unwrap_err();
-            assert!(matches!(
-                err,
-                SessionError::UnsupportedProtocolVersion(999)
-            ));
+            assert!(matches!(err, SessionError::UnsupportedProtocolVersion(999)));
         });
 
         // Hand-craft a NEW_SESSION frame with a bogus protocol version.
@@ -328,7 +324,10 @@ mod tests {
             MessageType::CtrlNewSessionStatus
         );
         let status = NewSessionStatusPayload::decode(&response.payload).unwrap();
-        assert_eq!(status.reason, NewSessionStatusReason::UnsupportedProtocolVersion);
+        assert_eq!(
+            status.reason,
+            NewSessionStatusReason::UnsupportedProtocolVersion
+        );
     }
 
     /// Server gets a non-NEW_SESSION first frame and bails.
@@ -337,10 +336,7 @@ mod tests {
         let (mut client, mut server) = duplex(1024);
         let server_task = tokio::spawn(async move {
             let err = server_accept_session(&mut server, 1).await.unwrap_err();
-            assert!(matches!(
-                err,
-                SessionError::UnexpectedMessageType { .. }
-            ));
+            assert!(matches!(err, SessionError::UnexpectedMessageType { .. }));
         });
         let frame = crate::framing::resume_request_frame(1, 0, 0);
         write_frame(&mut client, &frame).await.unwrap();
