@@ -46,9 +46,11 @@ allow = [
 confidence-threshold = 0.92
 
 [bans]
-# Disallow multiple major versions of the same crate without explicit
-# justification — cuts attack surface and binary size.
-multiple-versions = "warn"
+# Tolerate transitive duplicate major versions for now (getrandom, hashbrown,
+# thiserror, thiserror-impl). Tightening this is a follow-up: requires either
+# coordinating upstream version bumps or maintaining a `skip` list keyed on
+# crate name+version. Re-evaluate after PR 3 / 4.
+multiple-versions = "allow"
 wildcards = "deny"
 # Crates we never want pulled in via any path. Add entries with a reason.
 deny = [
