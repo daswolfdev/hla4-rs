@@ -42,17 +42,36 @@ async fn shutdown_after_client_connect_still_unwinds() {
     let handle = tokio::spawn(async move { serve_node.serve(listener).await });
 
     // Bring up at least one live connection so the per-session task exists.
-    let _client = TcpStream::connect(addr).await.unwrap();
+    // Run the FedPro handshake so we're in `run_session_loop`, not still
+    // stuck on the handshake read.
+    let mut client = TcpStream::connect(addr).await.unwrap();
+    let _ack = hla_wire::client_open_session(&mut client).await.unwrap();
 
-    // The connection's reader/writer tasks aren't joined by `serve` today
-    // — H4 leaves them detached — but the accept loop itself must
-    // unwind on shutdown.
     node.shutdown();
 
     let result = timeout(Duration::from_secs(2), handle)
         .await
         .expect("serve did not return within 2s after shutdown with live conn");
     assert!(result.expect("task panicked").is_ok());
+
+    // Per-session task must also unwind — closing the socket from the
+    // server side surfaces as a clean EOF on the next client read.
+    // Without per-session shutdown wiring the read would block until
+    // heartbeat timeout (180s by default).
+    let mut buf = [0u8; 1];
+    let read = timeout(Duration::from_secs(2), {
+        use tokio::io::AsyncReadExt;
+        async move { client.read(&mut buf).await }
+    })
+    .await
+    .expect("session task did not close the socket within 2s");
+    // Server-side close is observed as Ok(0) or an Io error (depending on
+    // FramedRead's drop order); either is acceptable evidence the per-
+    // session task unwound.
+    match read {
+        Ok(0) | Err(_) => {}
+        Ok(n) => panic!("unexpected non-zero read after shutdown: {n} bytes"),
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
