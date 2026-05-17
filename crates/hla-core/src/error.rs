@@ -5,6 +5,7 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum FederationManagementError {
     #[error("federation execution {0:?} already exists")]
     FederationExecutionAlreadyExists(String),
@@ -29,6 +30,7 @@ pub enum FederationManagementError {
 }
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum DeclarationManagementError {
     #[error("object class not defined: {0:?}")]
     ObjectClassNotDefined(String),
@@ -49,6 +51,7 @@ pub enum DeclarationManagementError {
 }
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum ObjectManagementError {
     #[error("object instance not known")]
     ObjectInstanceNotKnown,
@@ -73,6 +76,7 @@ pub enum ObjectManagementError {
 }
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum TimeManagementError {
     #[error("time regulation is already enabled")]
     TimeRegulationAlreadyEnabled,
@@ -94,6 +98,7 @@ pub enum TimeManagementError {
 
 #[derive(Debug, Error)]
 #[allow(clippy::enum_variant_names)] // matches the IEEE 1516.1 service-group taxonomy
+#[non_exhaustive]
 pub enum RtiError {
     #[error(transparent)]
     FederationManagement(#[from] FederationManagementError),

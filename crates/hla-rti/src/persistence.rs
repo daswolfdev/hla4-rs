@@ -27,14 +27,14 @@ use serde::{Deserialize, Serialize};
 use crate::Federation;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct FederationSnapshot {
+pub(crate) struct FederationSnapshot {
     pub federation_name: String,
     pub instances: Vec<SerInstance>,
     pub sync_points: Vec<SerSyncPoint>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct SerInstance {
+pub(crate) struct SerInstance {
     pub handle: u64,
     pub class: u32,
     pub name: String,
@@ -44,7 +44,7 @@ pub struct SerInstance {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct SerSyncPoint {
+pub(crate) struct SerSyncPoint {
     pub label: String,
     pub tag: Vec<u8>,
     /// Participant federate **names** (handle-independent).
@@ -55,7 +55,7 @@ impl Federation {
     /// Capture a snapshot of the federation's restorable state. Federate
     /// identity is keyed by name (not handle) so handle reassignment on
     /// restore is unambiguous.
-    pub fn snapshot(&self) -> FederationSnapshot {
+    pub(crate) fn snapshot(&self) -> FederationSnapshot {
         let federates = self.federates.read();
         // handle → name for fast reverse lookup.
         let handle_to_name: HashMap<_, String> = federates
@@ -112,7 +112,7 @@ impl Federation {
     /// mapped to currently-joined federate handles; ownership entries for
     /// federates not present today are dropped (their attributes become
     /// unowned).
-    pub fn apply_snapshot(&self, snap: &FederationSnapshot) {
+    pub(crate) fn apply_snapshot(&self, snap: &FederationSnapshot) {
         let federates = self.federates.read();
         let name_to_handle: HashMap<String, hla_core::FederateHandle> = federates
             .values()
@@ -183,13 +183,13 @@ impl Federation {
 }
 
 /// Filesystem path for a snapshot file. One file per (save_dir, federation, label).
-pub fn snapshot_path(save_dir: &Path, federation: &str, label: &str) -> PathBuf {
+pub(crate) fn snapshot_path(save_dir: &Path, federation: &str, label: &str) -> PathBuf {
     let safe_fed = federation.replace(['/', '\\'], "_");
     let safe_label = label.replace(['/', '\\'], "_");
     save_dir.join(format!("{safe_fed}__{safe_label}.json"))
 }
 
-pub fn write_snapshot(
+pub(crate) fn write_snapshot(
     save_dir: &Path,
     federation: &str,
     label: &str,
@@ -202,7 +202,7 @@ pub fn write_snapshot(
     fs::write(path, json)
 }
 
-pub fn read_snapshot(
+pub(crate) fn read_snapshot(
     save_dir: &Path,
     federation: &str,
     label: &str,

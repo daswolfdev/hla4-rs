@@ -13,6 +13,7 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum EncodingError {
     #[error("not enough bytes: needed {needed}, had {had}")]
     Truncated { needed: usize, had: usize },

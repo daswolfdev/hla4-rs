@@ -8,13 +8,13 @@ use hla_core::{
 };
 use hla_fedpro_proto::fedpro;
 
-pub fn encode_object_class(h: ObjectClassHandle) -> fedpro::ObjectClassHandle {
+pub(crate) fn encode_object_class(h: ObjectClassHandle) -> fedpro::ObjectClassHandle {
     fedpro::ObjectClassHandle {
         data: h.raw().to_be_bytes().to_vec(),
     }
 }
 
-pub fn decode_object_class(p: &fedpro::ObjectClassHandle) -> Option<ObjectClassHandle> {
+pub(crate) fn decode_object_class(p: &fedpro::ObjectClassHandle) -> Option<ObjectClassHandle> {
     if p.data.len() != 4 {
         return None;
     }
@@ -23,13 +23,13 @@ pub fn decode_object_class(p: &fedpro::ObjectClassHandle) -> Option<ObjectClassH
     )))
 }
 
-pub fn encode_attribute(h: AttributeHandle) -> fedpro::AttributeHandle {
+pub(crate) fn encode_attribute(h: AttributeHandle) -> fedpro::AttributeHandle {
     fedpro::AttributeHandle {
         data: h.raw().to_be_bytes().to_vec(),
     }
 }
 
-pub fn decode_attribute(p: &fedpro::AttributeHandle) -> Option<AttributeHandle> {
+pub(crate) fn decode_attribute(p: &fedpro::AttributeHandle) -> Option<AttributeHandle> {
     if p.data.len() != 4 {
         return None;
     }
@@ -38,13 +38,15 @@ pub fn decode_attribute(p: &fedpro::AttributeHandle) -> Option<AttributeHandle> 
     )))
 }
 
-pub fn encode_interaction_class(h: InteractionClassHandle) -> fedpro::InteractionClassHandle {
+pub(crate) fn encode_interaction_class(
+    h: InteractionClassHandle,
+) -> fedpro::InteractionClassHandle {
     fedpro::InteractionClassHandle {
         data: h.raw().to_be_bytes().to_vec(),
     }
 }
 
-pub fn decode_interaction_class(
+pub(crate) fn decode_interaction_class(
     p: &fedpro::InteractionClassHandle,
 ) -> Option<InteractionClassHandle> {
     if p.data.len() != 4 {
@@ -55,13 +57,13 @@ pub fn decode_interaction_class(
     )))
 }
 
-pub fn encode_parameter(h: ParameterHandle) -> fedpro::ParameterHandle {
+pub(crate) fn encode_parameter(h: ParameterHandle) -> fedpro::ParameterHandle {
     fedpro::ParameterHandle {
         data: h.raw().to_be_bytes().to_vec(),
     }
 }
 
-pub fn decode_parameter(p: &fedpro::ParameterHandle) -> Option<ParameterHandle> {
+pub(crate) fn decode_parameter(p: &fedpro::ParameterHandle) -> Option<ParameterHandle> {
     if p.data.len() != 4 {
         return None;
     }
@@ -70,13 +72,15 @@ pub fn decode_parameter(p: &fedpro::ParameterHandle) -> Option<ParameterHandle> 
     )))
 }
 
-pub fn encode_object_instance(h: ObjectInstanceHandle) -> fedpro::ObjectInstanceHandle {
+pub(crate) fn encode_object_instance(h: ObjectInstanceHandle) -> fedpro::ObjectInstanceHandle {
     fedpro::ObjectInstanceHandle {
         data: h.raw().to_be_bytes().to_vec(),
     }
 }
 
-pub fn decode_object_instance(p: &fedpro::ObjectInstanceHandle) -> Option<ObjectInstanceHandle> {
+pub(crate) fn decode_object_instance(
+    p: &fedpro::ObjectInstanceHandle,
+) -> Option<ObjectInstanceHandle> {
     if p.data.len() != 8 {
         return None;
     }
@@ -85,7 +89,7 @@ pub fn decode_object_instance(p: &fedpro::ObjectInstanceHandle) -> Option<Object
     )))
 }
 
-pub fn decode_federate(p: &fedpro::FederateHandle) -> Option<FederateHandle> {
+pub(crate) fn decode_federate(p: &fedpro::FederateHandle) -> Option<FederateHandle> {
     if p.data.len() != 4 {
         return None;
     }
@@ -94,7 +98,7 @@ pub fn decode_federate(p: &fedpro::FederateHandle) -> Option<FederateHandle> {
     )))
 }
 
-pub fn decode_attribute_value_map(
+pub(crate) fn decode_attribute_value_map(
     p: &fedpro::AttributeHandleValueMap,
 ) -> hla_core::AttributeHandleValueMap {
     p.attribute_handle_value
@@ -106,7 +110,7 @@ pub fn decode_attribute_value_map(
         .collect()
 }
 
-pub fn decode_parameter_value_map(
+pub(crate) fn decode_parameter_value_map(
     p: &fedpro::ParameterHandleValueMap,
 ) -> hla_core::ParameterHandleValueMap {
     p.parameter_handle_value

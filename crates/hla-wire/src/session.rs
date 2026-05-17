@@ -52,6 +52,7 @@ pub enum SessionError {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SessionState {
     New,
     Starting,
@@ -63,6 +64,7 @@ pub enum SessionState {
 }
 
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum Transport {
     Tcp,
     Tls,

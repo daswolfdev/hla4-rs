@@ -16,28 +16,31 @@ use hla_fedpro_proto::fedpro::{
     ParameterHandle as ProtoParameterHandle,
 };
 
+use crate::exception::HlaException;
+
 #[derive(Debug)]
-pub enum HandleError {
-    /// IEEE 1516.1 exception name to surface back to the federate.
-    Invalid(&'static str),
+#[non_exhaustive]
+pub(crate) enum HandleError {
+    /// IEEE 1516.1 exception kind to surface back to the federate.
+    Invalid(HlaException),
 }
 
-pub fn encode_u32(raw: u32) -> Vec<u8> {
+pub(crate) fn encode_u32(raw: u32) -> Vec<u8> {
     raw.to_be_bytes().to_vec()
 }
 
-pub fn encode_u64(raw: u64) -> Vec<u8> {
+pub(crate) fn encode_u64(raw: u64) -> Vec<u8> {
     raw.to_be_bytes().to_vec()
 }
 
-fn decode_u32(bytes: &[u8], exception: &'static str) -> Result<u32, HandleError> {
+fn decode_u32(bytes: &[u8], exception: HlaException) -> Result<u32, HandleError> {
     if bytes.len() != 4 {
         return Err(HandleError::Invalid(exception));
     }
     Ok(u32::from_be_bytes(bytes.try_into().unwrap()))
 }
 
-fn decode_u64(bytes: &[u8], exception: &'static str) -> Result<u64, HandleError> {
+fn decode_u64(bytes: &[u8], exception: HlaException) -> Result<u64, HandleError> {
     if bytes.len() != 8 {
         return Err(HandleError::Invalid(exception));
     }
@@ -46,37 +49,37 @@ fn decode_u64(bytes: &[u8], exception: &'static str) -> Result<u64, HandleError>
 
 // ----- encode (typed → proto) -----
 
-pub fn encode_object_class(h: ObjectClassHandle) -> ProtoObjectClassHandle {
+pub(crate) fn encode_object_class(h: ObjectClassHandle) -> ProtoObjectClassHandle {
     ProtoObjectClassHandle {
         data: encode_u32(h.raw()),
     }
 }
 
-pub fn encode_attribute(h: AttributeHandle) -> ProtoAttributeHandle {
+pub(crate) fn encode_attribute(h: AttributeHandle) -> ProtoAttributeHandle {
     ProtoAttributeHandle {
         data: encode_u32(h.raw()),
     }
 }
 
-pub fn encode_interaction_class(h: InteractionClassHandle) -> ProtoInteractionClassHandle {
+pub(crate) fn encode_interaction_class(h: InteractionClassHandle) -> ProtoInteractionClassHandle {
     ProtoInteractionClassHandle {
         data: encode_u32(h.raw()),
     }
 }
 
-pub fn encode_parameter(h: ParameterHandle) -> ProtoParameterHandle {
+pub(crate) fn encode_parameter(h: ParameterHandle) -> ProtoParameterHandle {
     ProtoParameterHandle {
         data: encode_u32(h.raw()),
     }
 }
 
-pub fn encode_object_instance(h: ObjectInstanceHandle) -> ProtoObjectInstanceHandle {
+pub(crate) fn encode_object_instance(h: ObjectInstanceHandle) -> ProtoObjectInstanceHandle {
     ProtoObjectInstanceHandle {
         data: encode_u64(h.raw()),
     }
 }
 
-pub fn encode_federate(h: FederateHandle) -> ProtoFederateHandle {
+pub(crate) fn encode_federate(h: FederateHandle) -> ProtoFederateHandle {
     ProtoFederateHandle {
         data: encode_u32(h.raw()),
     }
@@ -84,26 +87,29 @@ pub fn encode_federate(h: FederateHandle) -> ProtoFederateHandle {
 
 // ----- decode (proto → typed) -----
 
-pub fn decode_object_class(p: &ProtoObjectClassHandle) -> Result<ObjectClassHandle, HandleError> {
-    decode_u32(&p.data, "InvalidObjectClassHandle").map(ObjectClassHandle::new)
+pub(crate) fn decode_object_class(
+    p: &ProtoObjectClassHandle,
+) -> Result<ObjectClassHandle, HandleError> {
+    decode_u32(&p.data, HlaException::InvalidObjectClassHandle).map(ObjectClassHandle::new)
 }
 
-pub fn decode_attribute(p: &ProtoAttributeHandle) -> Result<AttributeHandle, HandleError> {
-    decode_u32(&p.data, "InvalidAttributeHandle").map(AttributeHandle::new)
+pub(crate) fn decode_attribute(p: &ProtoAttributeHandle) -> Result<AttributeHandle, HandleError> {
+    decode_u32(&p.data, HlaException::InvalidAttributeHandle).map(AttributeHandle::new)
 }
 
-pub fn decode_interaction_class(
+pub(crate) fn decode_interaction_class(
     p: &ProtoInteractionClassHandle,
 ) -> Result<InteractionClassHandle, HandleError> {
-    decode_u32(&p.data, "InvalidInteractionClassHandle").map(InteractionClassHandle::new)
+    decode_u32(&p.data, HlaException::InvalidInteractionClassHandle)
+        .map(InteractionClassHandle::new)
 }
 
-pub fn decode_parameter(p: &ProtoParameterHandle) -> Result<ParameterHandle, HandleError> {
-    decode_u32(&p.data, "InvalidParameterHandle").map(ParameterHandle::new)
+pub(crate) fn decode_parameter(p: &ProtoParameterHandle) -> Result<ParameterHandle, HandleError> {
+    decode_u32(&p.data, HlaException::InvalidParameterHandle).map(ParameterHandle::new)
 }
 
-pub fn decode_object_instance(
+pub(crate) fn decode_object_instance(
     p: &ProtoObjectInstanceHandle,
 ) -> Result<ObjectInstanceHandle, HandleError> {
-    decode_u64(&p.data, "InvalidObjectInstanceHandle").map(ObjectInstanceHandle::new)
+    decode_u64(&p.data, HlaException::InvalidObjectInstanceHandle).map(ObjectInstanceHandle::new)
 }

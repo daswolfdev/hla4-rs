@@ -16,6 +16,7 @@ pub mod merge;
 pub mod xml;
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum FomError {
     #[error("XML parse error: {0}")]
     Xml(String),
@@ -74,6 +75,7 @@ pub struct ParameterDef {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum OrderTypeRef {
     Receive,
     TimestampOrder,
@@ -90,6 +92,7 @@ impl OrderTypeRef {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Ownership {
     DivestAcquire,
     NoTransfer,
@@ -106,6 +109,7 @@ impl Ownership {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Sharing {
     Publish,
     Subscribe,
@@ -126,6 +130,7 @@ impl Sharing {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum UpdateType {
     Static,
     Periodic,

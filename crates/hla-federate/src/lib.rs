@@ -7,7 +7,9 @@
 
 pub mod ambassador;
 pub mod callbacks;
-pub mod handles;
+// Internal: the handles module exposes `prost`-generated types. Keep it
+// out of the public API per BESTPRACTICES §C2.
+pub(crate) mod handles;
 
 pub use ambassador::{CallError, ConnectError, RtiAmbassador};
 pub use callbacks::FederateAmbassador;

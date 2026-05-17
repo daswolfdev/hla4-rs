@@ -28,14 +28,14 @@ pub struct Membership {
 }
 
 impl SessionContext {
-    pub fn new(session_id: u64) -> Self {
+    pub(crate) fn new(session_id: u64) -> Self {
         Self {
             session_id,
             membership: None,
         }
     }
 
-    pub fn is_joined(&self) -> bool {
+    pub(crate) fn is_joined(&self) -> bool {
         self.membership.is_some()
     }
 }

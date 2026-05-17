@@ -25,7 +25,7 @@ use crate::{Federation, RtiNode};
 
 /// Lower Bound on Time Stamp across the federation's regulating federates.
 /// Returns `f64::INFINITY` if nobody is regulating.
-pub fn lbts(federation: &Federation) -> f64 {
+pub(crate) fn lbts(federation: &Federation) -> f64 {
     let federates = federation.federates.read();
     federates
         .values()
@@ -41,7 +41,7 @@ pub fn lbts(federation: &Federation) -> f64 {
 ///
 /// Pushes `TimeAdvanceGrant` callbacks onto `out`. Caller is responsible for
 /// delivering them via the connection's mpsc.
-pub fn try_grant_pending_advances(
+pub(crate) fn try_grant_pending_advances(
     node: &Arc<RtiNode>,
     federation: &Federation,
     out: &mut Vec<OutboundCallback>,
@@ -115,7 +115,7 @@ fn single_set(fh: FederateHandle) -> std::collections::HashSet<FederateHandle> {
 
 /// Convenience: snapshot of every federate's time state, for tests / MOM.
 #[allow(dead_code)]
-pub fn snapshot(federation: &Federation) -> HashMap<FederateHandle, (f64, f64, bool, bool)> {
+pub(crate) fn snapshot(federation: &Federation) -> HashMap<FederateHandle, (f64, f64, bool, bool)> {
     let federates = federation.federates.read();
     federates
         .iter()
