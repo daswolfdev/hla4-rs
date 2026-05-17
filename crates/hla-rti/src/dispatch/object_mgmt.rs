@@ -2,7 +2,7 @@
 //!
 //! Section: Object Management
 
-#![allow(unused_imports, clippy::wildcard_imports, dead_code)]
+#![allow(unused_imports, clippy::wildcard_imports)]
 
 use std::collections::HashMap;
 use std::sync::Arc;
