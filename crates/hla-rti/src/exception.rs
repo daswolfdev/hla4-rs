@@ -73,7 +73,7 @@ pub enum HlaException {
 
 impl HlaException {
     /// Canonical spec name as it appears on the wire.
-    pub(crate) const fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::AttributeNotDefined => "AttributeNotDefined",
             Self::AttributeNotOwned => "AttributeNotOwned",
@@ -137,5 +137,172 @@ impl HlaException {
 impl fmt::Display for HlaException {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.name())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Wire-string contract guard. Any drift between a variant identifier and
+    /// the canonical IEEE 1516.1-2025 exception name belongs in this table,
+    /// so the test fails the moment the mapping changes. Pay attention to the
+    /// three non-trivial casings: `*Fdd`, `*Fdd`, and `RtiInternal`.
+    #[test]
+    fn wire_string_mapping_is_canonical() {
+        let cases: &[(HlaException, &str)] = &[
+            (HlaException::AttributeNotDefined, "AttributeNotDefined"),
+            (HlaException::AttributeNotOwned, "AttributeNotOwned"),
+            (HlaException::CouldNotOpenFdd, "CouldNotOpenFDD"),
+            (
+                HlaException::DeletePrivilegeNotHeld,
+                "DeletePrivilegeNotHeld",
+            ),
+            (HlaException::ErrorReadingFdd, "ErrorReadingFDD"),
+            (
+                HlaException::FederateAlreadyExecutionMember,
+                "FederateAlreadyExecutionMember",
+            ),
+            (
+                HlaException::FederateNameAlreadyInUse,
+                "FederateNameAlreadyInUse",
+            ),
+            (
+                HlaException::FederateNotExecutionMember,
+                "FederateNotExecutionMember",
+            ),
+            (
+                HlaException::FederateNotInSaveInitiated,
+                "FederateNotInSaveInitiated",
+            ),
+            (HlaException::FederateNotInSaveSet, "FederateNotInSaveSet"),
+            (
+                HlaException::FederateNotInSynchronizationGroup,
+                "FederateNotInSynchronizationGroup",
+            ),
+            (
+                HlaException::FederatesCurrentlyJoined,
+                "FederatesCurrentlyJoined",
+            ),
+            (
+                HlaException::FederationExecutionAlreadyExists,
+                "FederationExecutionAlreadyExists",
+            ),
+            (
+                HlaException::FederationExecutionDoesNotExist,
+                "FederationExecutionDoesNotExist",
+            ),
+            (
+                HlaException::InteractionClassNotDefined,
+                "InteractionClassNotDefined",
+            ),
+            (
+                HlaException::InteractionClassNotPublished,
+                "InteractionClassNotPublished",
+            ),
+            (
+                HlaException::InteractionParameterNotDefined,
+                "InteractionParameterNotDefined",
+            ),
+            (HlaException::InTimeAdvancingState, "InTimeAdvancingState"),
+            (
+                HlaException::InvalidAttributeHandle,
+                "InvalidAttributeHandle",
+            ),
+            (HlaException::InvalidDimension, "InvalidDimension"),
+            (
+                HlaException::InvalidDimensionHandle,
+                "InvalidDimensionHandle",
+            ),
+            (HlaException::InvalidFederateHandle, "InvalidFederateHandle"),
+            (
+                HlaException::InvalidInteractionClassHandle,
+                "InvalidInteractionClassHandle",
+            ),
+            (HlaException::InvalidLogicalTime, "InvalidLogicalTime"),
+            (HlaException::InvalidLookahead, "InvalidLookahead"),
+            (
+                HlaException::InvalidObjectClassHandle,
+                "InvalidObjectClassHandle",
+            ),
+            (
+                HlaException::InvalidObjectInstanceHandle,
+                "InvalidObjectInstanceHandle",
+            ),
+            (HlaException::InvalidOrderName, "InvalidOrderName"),
+            (HlaException::InvalidOrderType, "InvalidOrderType"),
+            (
+                HlaException::InvalidParameterHandle,
+                "InvalidParameterHandle",
+            ),
+            (HlaException::InvalidRangeBound, "InvalidRangeBound"),
+            (HlaException::InvalidRegion, "InvalidRegion"),
+            (HlaException::InvalidResignAction, "InvalidResignAction"),
+            (HlaException::InvalidRestoreLabel, "InvalidRestoreLabel"),
+            (HlaException::InvalidSaveLabel, "InvalidSaveLabel"),
+            (
+                HlaException::InvalidSynchronizationPointLabel,
+                "InvalidSynchronizationPointLabel",
+            ),
+            (
+                HlaException::InvalidTransportationName,
+                "InvalidTransportationName",
+            ),
+            (
+                HlaException::InvalidTransportationTypeHandle,
+                "InvalidTransportationTypeHandle",
+            ),
+            (
+                HlaException::LogicalTimeAlreadyPassed,
+                "LogicalTimeAlreadyPassed",
+            ),
+            (HlaException::NameNotFound, "NameNotFound"),
+            (HlaException::ObjectClassNotDefined, "ObjectClassNotDefined"),
+            (
+                HlaException::ObjectClassNotPublished,
+                "ObjectClassNotPublished",
+            ),
+            (
+                HlaException::ObjectInstanceNameInUse,
+                "ObjectInstanceNameInUse",
+            ),
+            (
+                HlaException::ObjectInstanceNotKnown,
+                "ObjectInstanceNotKnown",
+            ),
+            (
+                HlaException::RegionNotCreatedByThisFederate,
+                "RegionNotCreatedByThisFederate",
+            ),
+            (HlaException::RestoreInProgress, "RestoreInProgress"),
+            (HlaException::RestoreNotInProgress, "RestoreNotInProgress"),
+            (HlaException::RtiInternalError, "RTIinternalError"),
+            (HlaException::SaveInProgress, "SaveInProgress"),
+            (HlaException::SaveNotInProgress, "SaveNotInProgress"),
+            (
+                HlaException::SynchronizationPointLabelNotAnnounced,
+                "SynchronizationPointLabelNotAnnounced",
+            ),
+            (
+                HlaException::TimeConstrainedAlreadyEnabled,
+                "TimeConstrainedAlreadyEnabled",
+            ),
+            (
+                HlaException::TimeConstrainedIsNotEnabled,
+                "TimeConstrainedIsNotEnabled",
+            ),
+            (
+                HlaException::TimeRegulationAlreadyEnabled,
+                "TimeRegulationAlreadyEnabled",
+            ),
+            (
+                HlaException::TimeRegulationIsNotEnabled,
+                "TimeRegulationIsNotEnabled",
+            ),
+        ];
+        for (variant, expected) in cases {
+            assert_eq!(variant.name(), *expected, "wire string for {variant:?}");
+            assert_eq!(variant.to_string(), *expected, "Display for {variant:?}");
+        }
     }
 }

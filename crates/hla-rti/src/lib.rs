@@ -44,8 +44,9 @@ pub(crate) mod time;
 
 pub use exception::HlaException;
 pub use metrics::{MetricsSnapshot, ServerMetrics};
-
-pub use session::{Membership, SessionContext};
+// `Membership` and `SessionContext` are part of dispatch-internal state.
+// They have no public constructors, so re-exporting them only adds noise
+// to the rustdoc — keep them crate-private until there's a real consumer.
 
 /// Per-connection writer handle. Owned via `Arc` so dispatch handlers (which
 /// fire callbacks at *other* federates' connections) can clone the handle
@@ -74,6 +75,9 @@ pub struct ConnectionLimits {
 /// federate's transport dropped, eligible to be resumed via
 /// `CTRL_RESUME_REQUEST` before `deadline`. When the deadline passes the
 /// janitor performs cleanup (auto-resign on any joined federation).
+// PR 4 (audit M2) will hide `SuspendedSession` and the field on `RtiNode`
+// that holds it. Until then, both must stay `pub` because integration tests
+// reach into `node.federations` / `node.connections` / etc. directly.
 pub struct SuspendedSession {
     pub membership: Option<session::Membership>,
     pub deadline: Instant,
@@ -892,7 +896,7 @@ impl RtiNode {
             }
         });
 
-        let mut ctx = SessionContext::new(session_id);
+        let mut ctx = session::SessionContext::new(session_id);
         ctx.membership = restored_membership;
         let result =
             Self::run_session_loop(&self, &mut *source, &connection, &mut ctx, hb_config).await;
@@ -977,7 +981,7 @@ impl RtiNode {
         node: &Arc<Self>,
         source: &mut R,
         connection: &Arc<ConnectionHandle>,
-        ctx: &mut SessionContext,
+        ctx: &mut session::SessionContext,
         hb_config: HeartbeatConfig,
     ) -> Result<(), SessionError>
     where
@@ -1038,7 +1042,9 @@ impl RtiNode {
                                     call_response: Some(
                                         fedpro::call_response::CallResponse::ExceptionData(
                                             fedpro::ExceptionData {
-                                                exception_name: "RTIinternalError".to_string(),
+                                                exception_name: HlaException::RtiInternalError
+                                                    .name()
+                                                    .to_string(),
                                                 details: format!("malformed CallRequest: {e}"),
                                             },
                                         ),

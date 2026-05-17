@@ -47,6 +47,7 @@ impl ServerMetrics {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MetricsSnapshot {
     pub calls_dispatched: u64,
     pub call_exceptions: u64,
