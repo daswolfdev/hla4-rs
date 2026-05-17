@@ -29,17 +29,24 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
-pub mod dispatch;
-pub mod handles;
-pub mod metrics;
-pub mod persistence;
-pub mod routing;
-pub mod session;
-pub mod time;
+// Internal modules. The public surface is the `pub use` re-exports below;
+// nothing outside the crate should reach into these. In particular,
+// `dispatch` and `routing` produce `prost`-generated types that must not
+// leak through the public API — see BESTPRACTICES §C2.
+pub(crate) mod dispatch;
+pub(crate) mod exception;
+pub(crate) mod handles;
+pub(crate) mod metrics;
+pub(crate) mod persistence;
+pub(crate) mod routing;
+pub(crate) mod session;
+pub(crate) mod time;
 
+pub use exception::HlaException;
 pub use metrics::{MetricsSnapshot, ServerMetrics};
-
-pub use session::{Membership, SessionContext};
+// `Membership` and `SessionContext` are part of dispatch-internal state.
+// They have no public constructors, so re-exporting them only adds noise
+// to the rustdoc — keep them crate-private until there's a real consumer.
 
 /// Per-connection writer handle. Owned via `Arc` so dispatch handlers (which
 /// fire callbacks at *other* federates' connections) can clone the handle
@@ -68,6 +75,9 @@ pub struct ConnectionLimits {
 /// federate's transport dropped, eligible to be resumed via
 /// `CTRL_RESUME_REQUEST` before `deadline`. When the deadline passes the
 /// janitor performs cleanup (auto-resign on any joined federation).
+// PR 4 (audit M2) will hide `SuspendedSession` and the field on `RtiNode`
+// that holds it. Until then, both must stay `pub` because integration tests
+// reach into `node.federations` / `node.connections` / etc. directly.
 pub struct SuspendedSession {
     pub membership: Option<session::Membership>,
     pub deadline: Instant,
@@ -102,6 +112,7 @@ impl Default for HeartbeatConfig {
 }
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum RtiServerError {
     #[error("bind failed: {0}")]
     Bind(std::io::Error),
@@ -364,6 +375,7 @@ pub struct TimeCoordinator {
 
 /// Per-federate participation status in an in-progress federation save.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SaveStatus {
     Initiated,
     BegunSave,
@@ -373,6 +385,7 @@ pub enum SaveStatus {
 
 /// Per-federate participation status in an in-progress federation restore.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RestoreStatus {
     Initiated,
     Complete,
@@ -883,7 +896,7 @@ impl RtiNode {
             }
         });
 
-        let mut ctx = SessionContext::new(session_id);
+        let mut ctx = session::SessionContext::new(session_id);
         ctx.membership = restored_membership;
         let result =
             Self::run_session_loop(&self, &mut *source, &connection, &mut ctx, hb_config).await;
@@ -968,7 +981,7 @@ impl RtiNode {
         node: &Arc<Self>,
         source: &mut R,
         connection: &Arc<ConnectionHandle>,
-        ctx: &mut SessionContext,
+        ctx: &mut session::SessionContext,
         hb_config: HeartbeatConfig,
     ) -> Result<(), SessionError>
     where
@@ -1029,7 +1042,9 @@ impl RtiNode {
                                     call_response: Some(
                                         fedpro::call_response::CallResponse::ExceptionData(
                                             fedpro::ExceptionData {
-                                                exception_name: "RTIinternalError".to_string(),
+                                                exception_name: HlaException::RtiInternalError
+                                                    .name()
+                                                    .to_string(),
                                                 details: format!("malformed CallRequest: {e}"),
                                             },
                                         ),

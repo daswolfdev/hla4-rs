@@ -27,7 +27,7 @@ use crate::{ConnectionHandle, Federation, RtiNode};
 /// Walk `class`'s inheritance chain, returning every federate that subscribes
 /// to *any* of `attrs` at any ancestor class (including `class` itself).
 /// Optionally exclude `producer` so a federate's own updates don't loop back.
-pub fn subscribers_for_attributes(
+pub(crate) fn subscribers_for_attributes(
     federation: &Federation,
     class: ObjectClassHandle,
     attrs: &[AttributeHandle],
@@ -51,7 +51,7 @@ pub fn subscribers_for_attributes(
 
 /// Symmetric for interaction classes — walk parent chain so a subscriber to
 /// the root receives interactions on derived classes.
-pub fn subscribers_for_interaction(
+pub(crate) fn subscribers_for_interaction(
     federation: &Federation,
     class: InteractionClassHandle,
     exclude: Option<FederateHandle>,
@@ -77,7 +77,7 @@ pub fn subscribers_for_interaction(
 
 /// Resolve a set of `FederateHandle`s to live `ConnectionHandle`s, skipping
 /// any federate whose connection is no longer registered (mid-disconnect).
-pub fn live_connections(
+pub(crate) fn live_connections(
     node: &Arc<RtiNode>,
     federation: &Federation,
     federates: &HashSet<FederateHandle>,
@@ -104,14 +104,14 @@ pub fn live_connections(
 /// not a buffer copy. Combined with `fan_out` encoding the protobuf exactly
 /// once per update, this turns the previous O(N) encode + O(N) struct-clone
 /// cost (per recipient) into O(1) encode + O(N) cheap Bytes clones.
-pub struct OutboundCallback {
+pub(crate) struct OutboundCallback {
     pub target: Arc<ConnectionHandle>,
     pub body: Bytes,
 }
 
 impl OutboundCallback {
     /// Stamp a fresh outbound sequence number and produce the wire frame.
-    pub fn into_frame(self) -> Frame {
+    pub(crate) fn into_frame(self) -> Frame {
         let seq = hla_wire::claim_next_outbound_seq(&self.target.next_outbound_seq);
         let header = MessageHeader::with_payload_size(
             self.body.len() as u32,
@@ -130,7 +130,7 @@ impl OutboundCallback {
 /// Encode `callback` exactly once and queue a delivery to every live
 /// connection in `connections`. Every per-recipient `OutboundCallback`
 /// carries a cheap `Bytes` clone of the same encoded payload.
-pub fn fan_out(
+pub(crate) fn fan_out(
     out: &mut Vec<OutboundCallback>,
     connections: &[Arc<ConnectionHandle>],
     callback: fedpro::CallbackRequest,
@@ -152,7 +152,7 @@ pub fn fan_out(
 // in a `CallbackRequest` envelope so dispatch sites read clean.
 // -----------------------------------------------------------------------------
 
-pub fn discover_object_instance(
+pub(crate) fn discover_object_instance(
     instance: ObjectInstanceHandle,
     class: ObjectClassHandle,
     name: &str,
@@ -172,7 +172,7 @@ pub fn discover_object_instance(
     }
 }
 
-pub fn reflect_attribute_values_with_time(
+pub(crate) fn reflect_attribute_values_with_time(
     instance: ObjectInstanceHandle,
     values: &AttributeHandleValueMap,
     tag: &[u8],
@@ -208,7 +208,7 @@ pub fn reflect_attribute_values_with_time(
     }
 }
 
-pub fn receive_interaction_with_time(
+pub(crate) fn receive_interaction_with_time(
     class: InteractionClassHandle,
     params: &ParameterHandleValueMap,
     tag: &[u8],
@@ -244,7 +244,7 @@ pub fn receive_interaction_with_time(
     }
 }
 
-pub fn remove_object_instance_with_time(
+pub(crate) fn remove_object_instance_with_time(
     instance: ObjectInstanceHandle,
     tag: &[u8],
     producer: FederateHandle,
@@ -267,7 +267,7 @@ pub fn remove_object_instance_with_time(
     }
 }
 
-pub fn reflect_attribute_values(
+pub(crate) fn reflect_attribute_values(
     instance: ObjectInstanceHandle,
     values: &AttributeHandleValueMap,
     tag: &[u8],
@@ -298,7 +298,7 @@ pub fn reflect_attribute_values(
     }
 }
 
-pub fn receive_directed_interaction(
+pub(crate) fn receive_directed_interaction(
     class: InteractionClassHandle,
     instance: ObjectInstanceHandle,
     params: &ParameterHandleValueMap,
@@ -330,7 +330,7 @@ pub fn receive_directed_interaction(
     }
 }
 
-pub fn receive_interaction(
+pub(crate) fn receive_interaction(
     class: InteractionClassHandle,
     params: &ParameterHandleValueMap,
     tag: &[u8],
@@ -361,7 +361,7 @@ pub fn receive_interaction(
     }
 }
 
-pub fn report_federation_execution_members(
+pub(crate) fn report_federation_execution_members(
     federation_name: &str,
     members: &[(String, String)],
 ) -> fedpro::CallbackRequest {
@@ -385,7 +385,7 @@ pub fn report_federation_execution_members(
     }
 }
 
-pub fn report_federation_execution_does_not_exist(
+pub(crate) fn report_federation_execution_does_not_exist(
     federation_name: &str,
 ) -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
@@ -399,7 +399,7 @@ pub fn report_federation_execution_does_not_exist(
     }
 }
 
-pub fn report_federation_executions(federations: &[String]) -> fedpro::CallbackRequest {
+pub(crate) fn report_federation_executions(federations: &[String]) -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
         callback_request: Some(
             fedpro::callback_request::CallbackRequest::ReportFederationExecutions(
@@ -419,7 +419,7 @@ pub fn report_federation_executions(federations: &[String]) -> fedpro::CallbackR
     }
 }
 
-pub fn attribute_ownership_acquisition_notification(
+pub(crate) fn attribute_ownership_acquisition_notification(
     instance: ObjectInstanceHandle,
     secured: &[AttributeHandle],
     tag: &[u8],
@@ -439,7 +439,7 @@ pub fn attribute_ownership_acquisition_notification(
     }
 }
 
-pub fn attribute_ownership_unavailable(
+pub(crate) fn attribute_ownership_unavailable(
     instance: ObjectInstanceHandle,
     unavailable: &[AttributeHandle],
     tag: &[u8],
@@ -462,7 +462,7 @@ pub fn attribute_ownership_unavailable(
     }
 }
 
-pub fn request_federation_restore_succeeded(label: &str) -> fedpro::CallbackRequest {
+pub(crate) fn request_federation_restore_succeeded(label: &str) -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
         callback_request: Some(
             fedpro::callback_request::CallbackRequest::RequestFederationRestoreSucceeded(
@@ -474,7 +474,7 @@ pub fn request_federation_restore_succeeded(label: &str) -> fedpro::CallbackRequ
     }
 }
 
-pub fn request_federation_restore_failed(label: &str) -> fedpro::CallbackRequest {
+pub(crate) fn request_federation_restore_failed(label: &str) -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
         callback_request: Some(
             fedpro::callback_request::CallbackRequest::RequestFederationRestoreFailed(
@@ -486,7 +486,7 @@ pub fn request_federation_restore_failed(label: &str) -> fedpro::CallbackRequest
     }
 }
 
-pub fn federation_restore_begun() -> fedpro::CallbackRequest {
+pub(crate) fn federation_restore_begun() -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
         callback_request: Some(
             fedpro::callback_request::CallbackRequest::FederationRestoreBegun(
@@ -496,7 +496,7 @@ pub fn federation_restore_begun() -> fedpro::CallbackRequest {
     }
 }
 
-pub fn initiate_federate_restore(
+pub(crate) fn initiate_federate_restore(
     label: &str,
     federate_name: &str,
     post_restore_handle: FederateHandle,
@@ -514,7 +514,7 @@ pub fn initiate_federate_restore(
     }
 }
 
-pub fn federation_restored() -> fedpro::CallbackRequest {
+pub(crate) fn federation_restored() -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
         callback_request: Some(
             fedpro::callback_request::CallbackRequest::FederationRestored(
@@ -524,7 +524,7 @@ pub fn federation_restored() -> fedpro::CallbackRequest {
     }
 }
 
-pub fn federation_not_restored(reason: i32) -> fedpro::CallbackRequest {
+pub(crate) fn federation_not_restored(reason: i32) -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
         callback_request: Some(
             fedpro::callback_request::CallbackRequest::FederationNotRestored(
@@ -534,7 +534,7 @@ pub fn federation_not_restored(reason: i32) -> fedpro::CallbackRequest {
     }
 }
 
-pub fn initiate_federate_save(label: &str) -> fedpro::CallbackRequest {
+pub(crate) fn initiate_federate_save(label: &str) -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
         callback_request: Some(
             fedpro::callback_request::CallbackRequest::InitiateFederateSave(
@@ -546,7 +546,7 @@ pub fn initiate_federate_save(label: &str) -> fedpro::CallbackRequest {
     }
 }
 
-pub fn federation_saved() -> fedpro::CallbackRequest {
+pub(crate) fn federation_saved() -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
         callback_request: Some(fedpro::callback_request::CallbackRequest::FederationSaved(
             fedpro::FederationSaved {},
@@ -554,7 +554,7 @@ pub fn federation_saved() -> fedpro::CallbackRequest {
     }
 }
 
-pub fn federation_not_saved(reason: i32) -> fedpro::CallbackRequest {
+pub(crate) fn federation_not_saved(reason: i32) -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
         callback_request: Some(
             fedpro::callback_request::CallbackRequest::FederationNotSaved(
@@ -564,7 +564,7 @@ pub fn federation_not_saved(reason: i32) -> fedpro::CallbackRequest {
     }
 }
 
-pub fn inform_attribute_ownership(
+pub(crate) fn inform_attribute_ownership(
     instance: ObjectInstanceHandle,
     attributes: &[AttributeHandle],
     federate: FederateHandle,
@@ -584,7 +584,7 @@ pub fn inform_attribute_ownership(
     }
 }
 
-pub fn attribute_is_not_owned(
+pub(crate) fn attribute_is_not_owned(
     instance: ObjectInstanceHandle,
     attributes: &[AttributeHandle],
 ) -> fedpro::CallbackRequest {
@@ -602,7 +602,7 @@ pub fn attribute_is_not_owned(
     }
 }
 
-pub fn synchronization_point_registration_succeeded(label: &str) -> fedpro::CallbackRequest {
+pub(crate) fn synchronization_point_registration_succeeded(label: &str) -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
         callback_request: Some(
             fedpro::callback_request::CallbackRequest::SynchronizationPointRegistrationSucceeded(
@@ -614,7 +614,7 @@ pub fn synchronization_point_registration_succeeded(label: &str) -> fedpro::Call
     }
 }
 
-pub fn synchronization_point_registration_failed(
+pub(crate) fn synchronization_point_registration_failed(
     label: &str,
     reason: i32,
 ) -> fedpro::CallbackRequest {
@@ -630,7 +630,7 @@ pub fn synchronization_point_registration_failed(
     }
 }
 
-pub fn announce_synchronization_point(label: &str, tag: &[u8]) -> fedpro::CallbackRequest {
+pub(crate) fn announce_synchronization_point(label: &str, tag: &[u8]) -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
         callback_request: Some(
             fedpro::callback_request::CallbackRequest::AnnounceSynchronizationPoint(
@@ -643,7 +643,7 @@ pub fn announce_synchronization_point(label: &str, tag: &[u8]) -> fedpro::Callba
     }
 }
 
-pub fn federation_synchronized(
+pub(crate) fn federation_synchronized(
     label: &str,
     failed_set: &std::collections::HashSet<FederateHandle>,
 ) -> fedpro::CallbackRequest {
@@ -661,7 +661,9 @@ pub fn federation_synchronized(
     }
 }
 
-pub fn start_registration_for_object_class(class: ObjectClassHandle) -> fedpro::CallbackRequest {
+pub(crate) fn start_registration_for_object_class(
+    class: ObjectClassHandle,
+) -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
         callback_request: Some(
             fedpro::callback_request::CallbackRequest::StartRegistrationForObjectClass(
@@ -673,7 +675,9 @@ pub fn start_registration_for_object_class(class: ObjectClassHandle) -> fedpro::
     }
 }
 
-pub fn stop_registration_for_object_class(class: ObjectClassHandle) -> fedpro::CallbackRequest {
+pub(crate) fn stop_registration_for_object_class(
+    class: ObjectClassHandle,
+) -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
         callback_request: Some(
             fedpro::callback_request::CallbackRequest::StopRegistrationForObjectClass(
@@ -685,7 +689,7 @@ pub fn stop_registration_for_object_class(class: ObjectClassHandle) -> fedpro::C
     }
 }
 
-pub fn turn_interactions_on(class: InteractionClassHandle) -> fedpro::CallbackRequest {
+pub(crate) fn turn_interactions_on(class: InteractionClassHandle) -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
         callback_request: Some(
             fedpro::callback_request::CallbackRequest::TurnInteractionsOn(
@@ -697,7 +701,7 @@ pub fn turn_interactions_on(class: InteractionClassHandle) -> fedpro::CallbackRe
     }
 }
 
-pub fn turn_interactions_off(class: InteractionClassHandle) -> fedpro::CallbackRequest {
+pub(crate) fn turn_interactions_off(class: InteractionClassHandle) -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
         callback_request: Some(
             fedpro::callback_request::CallbackRequest::TurnInteractionsOff(
@@ -709,7 +713,7 @@ pub fn turn_interactions_off(class: InteractionClassHandle) -> fedpro::CallbackR
     }
 }
 
-pub fn time_regulation_enabled(time: f64) -> fedpro::CallbackRequest {
+pub(crate) fn time_regulation_enabled(time: f64) -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
         callback_request: Some(
             fedpro::callback_request::CallbackRequest::TimeRegulationEnabled(
@@ -721,7 +725,7 @@ pub fn time_regulation_enabled(time: f64) -> fedpro::CallbackRequest {
     }
 }
 
-pub fn time_constrained_enabled(time: f64) -> fedpro::CallbackRequest {
+pub(crate) fn time_constrained_enabled(time: f64) -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
         callback_request: Some(
             fedpro::callback_request::CallbackRequest::TimeConstrainedEnabled(
@@ -733,7 +737,7 @@ pub fn time_constrained_enabled(time: f64) -> fedpro::CallbackRequest {
     }
 }
 
-pub fn time_advance_grant(time: f64) -> fedpro::CallbackRequest {
+pub(crate) fn time_advance_grant(time: f64) -> fedpro::CallbackRequest {
     fedpro::CallbackRequest {
         callback_request: Some(fedpro::callback_request::CallbackRequest::TimeAdvanceGrant(
             fedpro::TimeAdvanceGrant {
@@ -743,33 +747,35 @@ pub fn time_advance_grant(time: f64) -> fedpro::CallbackRequest {
     }
 }
 
-pub fn encode_logical_time(t: f64) -> fedpro::LogicalTime {
+pub(crate) fn encode_logical_time(t: f64) -> fedpro::LogicalTime {
     fedpro::LogicalTime {
         data: t.to_be_bytes().to_vec(),
     }
 }
 
-pub fn encode_logical_time_interval(d: f64) -> fedpro::LogicalTimeInterval {
+pub(crate) fn encode_logical_time_interval(d: f64) -> fedpro::LogicalTimeInterval {
     fedpro::LogicalTimeInterval {
         data: d.to_be_bytes().to_vec(),
     }
 }
 
-pub fn decode_logical_time(p: &fedpro::LogicalTime) -> Result<f64, &'static str> {
+pub(crate) fn decode_logical_time(p: &fedpro::LogicalTime) -> Result<f64, crate::HlaException> {
     if p.data.len() != 8 {
-        return Err("InvalidLogicalTime");
+        return Err(crate::HlaException::InvalidLogicalTime);
     }
     Ok(f64::from_be_bytes(p.data[..].try_into().unwrap()))
 }
 
-pub fn decode_logical_time_interval(p: &fedpro::LogicalTimeInterval) -> Result<f64, &'static str> {
+pub(crate) fn decode_logical_time_interval(
+    p: &fedpro::LogicalTimeInterval,
+) -> Result<f64, crate::HlaException> {
     if p.data.len() != 8 {
-        return Err("InvalidLookahead");
+        return Err(crate::HlaException::InvalidLookahead);
     }
     Ok(f64::from_be_bytes(p.data[..].try_into().unwrap()))
 }
 
-pub fn remove_object_instance(
+pub(crate) fn remove_object_instance(
     instance: ObjectInstanceHandle,
     tag: &[u8],
     producer: FederateHandle,

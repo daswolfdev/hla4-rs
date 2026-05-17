@@ -12,7 +12,7 @@ use hla_core::FederateHandle;
 use crate::Federation;
 
 /// Live state for one federate connection.
-pub struct SessionContext {
+pub(crate) struct SessionContext {
     pub session_id: u64,
     /// `Some` once this session has joined a federation, cleared on resign.
     /// Holding `Arc<Federation>` lets handlers operate on the federation
@@ -28,14 +28,14 @@ pub struct Membership {
 }
 
 impl SessionContext {
-    pub fn new(session_id: u64) -> Self {
+    pub(crate) fn new(session_id: u64) -> Self {
         Self {
             session_id,
             membership: None,
         }
     }
 
-    pub fn is_joined(&self) -> bool {
+    pub(crate) fn is_joined(&self) -> bool {
         self.membership.is_some()
     }
 }

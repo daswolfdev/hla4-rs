@@ -11,6 +11,7 @@ use std::ops::Add;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum TimeCodecError {
     #[error("logical time encoding has wrong length: expected {expected}, got {got}")]
     WrongLength { expected: usize, got: usize },

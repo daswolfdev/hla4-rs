@@ -32,7 +32,7 @@ pub struct ServerMetrics {
 }
 
 impl ServerMetrics {
-    pub fn snapshot(&self) -> MetricsSnapshot {
+    pub(crate) fn snapshot(&self) -> MetricsSnapshot {
         MetricsSnapshot {
             calls_dispatched: self.calls_dispatched.load(Ordering::Relaxed),
             call_exceptions: self.call_exceptions.load(Ordering::Relaxed),
@@ -47,6 +47,7 @@ impl ServerMetrics {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MetricsSnapshot {
     pub calls_dispatched: u64,
     pub call_exceptions: u64,

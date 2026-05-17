@@ -38,6 +38,7 @@ use crate::handles::{
 };
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum ConnectError {
     #[error("invalid RTI URL: {0}")]
     InvalidUrl(String),
@@ -48,6 +49,7 @@ pub enum ConnectError {
 }
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum CallError {
     #[error("RTI exception {name}: {details}")]
     RtiException { name: String, details: String },

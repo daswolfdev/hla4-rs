@@ -69,7 +69,7 @@ use crate::{RestoreOperation, RestoreStatus, SaveOperation, SaveStatus};
 /// destined for *other* federates' connections. The caller (session loop) is
 /// responsible for actually awaiting their delivery so backpressure is
 /// honored and callbacks are never silently dropped.
-pub struct DispatchOutcome {
+pub(crate) struct DispatchOutcome {
     pub response: fedpro::CallResponse,
     pub callbacks: Vec<OutboundCallback>,
 }
@@ -80,7 +80,7 @@ pub struct DispatchOutcome {
 /// `DispatchOutcome.callbacks` rather than dispatched in-line, so the async
 /// session loop can `send().await` each one with proper backpressure — no
 /// silent drops under load.
-pub fn dispatch_call(
+pub(crate) fn dispatch_call(
     node: &Arc<RtiNode>,
     ctx: &mut SessionContext,
     request: fedpro::CallRequest,
@@ -91,7 +91,7 @@ pub fn dispatch_call(
         None => {
             return DispatchOutcome {
                 response: exception(
-                    "RTIinternalError",
+                    HlaException::RtiInternalError,
                     "CallRequest envelope had no oneof variant set",
                 ),
                 callbacks,
@@ -424,7 +424,7 @@ pub fn dispatch_call(
         Req::GetFederateHandleRequest(r) => get_federate_handle(ctx, &r.federate_name),
         Req::GetFederateNameRequest(r) => match r.federate {
             Some(h) => get_federate_name(ctx, h),
-            None => exception_variant("InvalidFederateHandle", ""),
+            None => exception_variant(HlaException::InvalidFederateHandle, ""),
         },
 
         // ---- OrderType / TransportationType lookup (well-known) ----
@@ -435,7 +435,7 @@ pub fn dispatch_call(
         }
         Req::GetTransportationTypeNameRequest(r) => match r.transportation_type {
             Some(h) => get_transportation_type_name(h),
-            None => exception_variant("InvalidTransportationTypeHandle", ""),
+            None => exception_variant(HlaException::InvalidTransportationTypeHandle, ""),
         },
 
         Req::ListFederationExecutionMembersRequest(r) => {
@@ -520,30 +520,39 @@ pub fn dispatch_call(
         Req::GetObjectClassHandleRequest(r) => get_object_class_handle(ctx, &r.object_class_name),
         Req::GetObjectClassNameRequest(r) => match r.object_class {
             Some(h) => get_object_class_name(ctx, h),
-            None => exception_variant("InvalidObjectClassHandle", "missing handle"),
+            None => exception_variant(HlaException::InvalidObjectClassHandle, "missing handle"),
         },
         Req::GetAttributeHandleRequest(r) => match r.object_class {
             Some(h) => get_attribute_handle(ctx, h, &r.attribute_name),
-            None => exception_variant("InvalidObjectClassHandle", "missing handle"),
+            None => exception_variant(HlaException::InvalidObjectClassHandle, "missing handle"),
         },
         Req::GetAttributeNameRequest(r) => match (r.object_class, r.attribute) {
             (Some(c), Some(a)) => get_attribute_name(ctx, c, a),
-            _ => exception_variant("InvalidObjectClassHandle", "missing handle(s)"),
+            _ => exception_variant(HlaException::InvalidObjectClassHandle, "missing handle(s)"),
         },
         Req::GetInteractionClassHandleRequest(r) => {
             get_interaction_class_handle(ctx, &r.interaction_class_name)
         }
         Req::GetInteractionClassNameRequest(r) => match r.interaction_class {
             Some(h) => get_interaction_class_name(ctx, h),
-            None => exception_variant("InvalidInteractionClassHandle", "missing handle"),
+            None => exception_variant(
+                HlaException::InvalidInteractionClassHandle,
+                "missing handle",
+            ),
         },
         Req::GetParameterHandleRequest(r) => match r.interaction_class {
             Some(h) => get_parameter_handle(ctx, h, &r.parameter_name),
-            None => exception_variant("InvalidInteractionClassHandle", "missing handle"),
+            None => exception_variant(
+                HlaException::InvalidInteractionClassHandle,
+                "missing handle",
+            ),
         },
         Req::GetParameterNameRequest(r) => match (r.interaction_class, r.parameter) {
             (Some(c), Some(p)) => get_parameter_name(ctx, c, p),
-            _ => exception_variant("InvalidInteractionClassHandle", "missing handle(s)"),
+            _ => exception_variant(
+                HlaException::InvalidInteractionClassHandle,
+                "missing handle(s)",
+            ),
         },
 
         // ---- Declaration Management ----
@@ -1102,7 +1111,7 @@ pub fn dispatch_call(
                 Some(m) => m.clone(),
                 None => {
                     return DispatchOutcome {
-                        response: exception("FederateNotExecutionMember", ""),
+                        response: exception(HlaException::FederateNotExecutionMember, ""),
                         callbacks,
                     };
                 }
@@ -1111,7 +1120,7 @@ pub fn dispatch_call(
                 Some(h) => h,
                 None => {
                     return DispatchOutcome {
-                        response: exception("InvalidObjectClassHandle", ""),
+                        response: exception(HlaException::InvalidObjectClassHandle, ""),
                         callbacks,
                     };
                 }
@@ -1127,7 +1136,7 @@ pub fn dispatch_call(
                 Some(m) => m.clone(),
                 None => {
                     return DispatchOutcome {
-                        response: exception("FederateNotExecutionMember", ""),
+                        response: exception(HlaException::FederateNotExecutionMember, ""),
                         callbacks,
                     };
                 }
@@ -1136,7 +1145,7 @@ pub fn dispatch_call(
                 Some(h) => h,
                 None => {
                     return DispatchOutcome {
-                        response: exception("InvalidObjectClassHandle", ""),
+                        response: exception(HlaException::InvalidObjectClassHandle, ""),
                         callbacks,
                     };
                 }
@@ -1211,7 +1220,7 @@ pub fn dispatch_call(
                 Some(m) => m,
                 None => {
                     return DispatchOutcome {
-                        response: exception("FederateNotExecutionMember", ""),
+                        response: exception(HlaException::FederateNotExecutionMember, ""),
                         callbacks,
                     };
                 }
@@ -1285,7 +1294,10 @@ pub fn dispatch_call(
         #[allow(unreachable_patterns)]
         other => {
             tracing::warn!(?other, "unimplemented service");
-            exception_variant("RTIinternalError", "service not yet implemented")
+            exception_variant(
+                HlaException::RtiInternalError,
+                "service not yet implemented",
+            )
         }
     };
 
@@ -1308,14 +1320,14 @@ fn create_federation_inner(
 ) -> Result<(), Resp> {
     if federation_name.is_empty() {
         return Err(exception_variant(
-            "ErrorReadingFDD",
+            HlaException::ErrorReadingFdd,
             "federationName must not be empty",
         ));
     }
     let mut federations = node.federations.write();
     if federations.contains_key(&federation_name) {
         return Err(exception_variant(
-            "FederationExecutionAlreadyExists",
+            HlaException::FederationExecutionAlreadyExists,
             &federation_name,
         ));
     }
@@ -1323,7 +1335,7 @@ fn create_federation_inner(
     for pm in &proto_modules {
         match decode_fom_module(pm) {
             Ok(m) => modules.push(m),
-            Err(e) => return Err(exception_variant("CouldNotOpenFDD", &e)),
+            Err(e) => return Err(exception_variant(HlaException::CouldNotOpenFdd, &e)),
         }
     }
     let fom = if modules.is_empty() {
@@ -1331,7 +1343,12 @@ fn create_federation_inner(
     } else {
         match hla_omt::MergedFom::merge(modules) {
             Ok(m) => Arc::new(m),
-            Err(e) => return Err(exception_variant("ErrorReadingFDD", &e.to_string())),
+            Err(e) => {
+                return Err(exception_variant(
+                    HlaException::ErrorReadingFdd,
+                    &e.to_string(),
+                ));
+            }
         }
     };
     let federation = Arc::new(Federation::new(federation_name.clone(), fom));
@@ -1362,10 +1379,15 @@ fn destroy_federation_execution(node: &Arc<RtiNode>, federation_name: String) ->
     let mut federations = node.federations.write();
     let entry = match federations.get(&federation_name) {
         Some(e) => e,
-        None => return exception_variant("FederationExecutionDoesNotExist", &federation_name),
+        None => {
+            return exception_variant(
+                HlaException::FederationExecutionDoesNotExist,
+                &federation_name,
+            );
+        }
     };
     if !entry.federates.read().is_empty() {
-        return exception_variant("FederatesCurrentlyJoined", &federation_name);
+        return exception_variant(HlaException::FederatesCurrentlyJoined, &federation_name);
     }
     federations.remove(&federation_name);
     Resp::DestroyFederationExecutionResponse(DestroyFederationExecutionResponse {})
@@ -1379,7 +1401,7 @@ fn join(
 ) -> Result<JoinResult, Resp> {
     if ctx.is_joined() {
         return Err(exception_variant(
-            "FederateAlreadyExecutionMember",
+            HlaException::FederateAlreadyExecutionMember,
             &format!("session {}", ctx.session_id),
         ));
     }
@@ -1389,7 +1411,7 @@ fn join(
             Some(f) => Arc::clone(f),
             None => {
                 return Err(exception_variant(
-                    "FederationExecutionDoesNotExist",
+                    HlaException::FederationExecutionDoesNotExist,
                     &federation_name,
                 ));
             }
@@ -1402,7 +1424,10 @@ fn join(
         Some(n) => {
             let federates = federation.federates.read();
             if federates.values().any(|f| f.name == n) {
-                return Err(exception_variant("FederateNameAlreadyInUse", &n));
+                return Err(exception_variant(
+                    HlaException::FederateNameAlreadyInUse,
+                    &n,
+                ));
             }
             n
         }
@@ -1438,7 +1463,7 @@ fn join(
 fn resign(ctx: &mut SessionContext) -> Resp {
     let membership = match ctx.membership.take() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     membership
         .federation
@@ -1455,7 +1480,7 @@ fn resign(ctx: &mut SessionContext) -> Resp {
 fn need_membership(ctx: &SessionContext) -> Result<&Membership, Resp> {
     ctx.membership
         .as_ref()
-        .ok_or_else(|| exception_variant("FederateNotExecutionMember", ""))
+        .ok_or_else(|| exception_variant(HlaException::FederateNotExecutionMember, ""))
 }
 
 fn get_object_class_handle(ctx: &SessionContext, name: &str) -> Resp {
@@ -1467,7 +1492,7 @@ fn get_object_class_handle(ctx: &SessionContext, name: &str) -> Resp {
         Some(h) => Resp::GetObjectClassHandleResponse(GetObjectClassHandleResponse {
             result: Some(encode_object_class(h)),
         }),
-        None => exception_variant("NameNotFound", name),
+        None => exception_variant(HlaException::NameNotFound, name),
     }
 }
 
@@ -1484,7 +1509,10 @@ fn get_object_class_name(ctx: &SessionContext, h: fedpro::ObjectClassHandle) -> 
         Some(d) => Resp::GetObjectClassNameResponse(GetObjectClassNameResponse {
             result: d.name.clone(),
         }),
-        None => exception_variant("InvalidObjectClassHandle", &format!("{handle:?}")),
+        None => exception_variant(
+            HlaException::InvalidObjectClassHandle,
+            &format!("{handle:?}"),
+        ),
     }
 }
 
@@ -1502,13 +1530,16 @@ fn get_attribute_handle(
         Err(HandleError::Invalid(n)) => return exception_variant(n, ""),
     };
     if m.federation.fom.object_class_def(class).is_none() {
-        return exception_variant("InvalidObjectClassHandle", &format!("{class:?}"));
+        return exception_variant(
+            HlaException::InvalidObjectClassHandle,
+            &format!("{class:?}"),
+        );
     }
     match m.federation.fom.attribute_handle(class, attr_name) {
         Some(h) => Resp::GetAttributeHandleResponse(GetAttributeHandleResponse {
             result: Some(encode_attribute(h)),
         }),
-        None => exception_variant("NameNotFound", attr_name),
+        None => exception_variant(HlaException::NameNotFound, attr_name),
     }
 }
 
@@ -1531,7 +1562,7 @@ fn get_attribute_name(
     };
     let def = match m.federation.fom.object_class_def(class) {
         Some(d) => d,
-        None => return exception_variant("InvalidObjectClassHandle", ""),
+        None => return exception_variant(HlaException::InvalidObjectClassHandle, ""),
     };
     // Linear scan; small N. We don't currently store attribute names indexed
     // by handle directly — `attribute_table` is name→handle.
@@ -1544,7 +1575,7 @@ fn get_attribute_name(
             });
         }
     }
-    exception_variant("AttributeNotDefined", &format!("{attr:?}"))
+    exception_variant(HlaException::AttributeNotDefined, &format!("{attr:?}"))
 }
 
 fn get_interaction_class_handle(ctx: &SessionContext, name: &str) -> Resp {
@@ -1556,7 +1587,7 @@ fn get_interaction_class_handle(ctx: &SessionContext, name: &str) -> Resp {
         Some(h) => Resp::GetInteractionClassHandleResponse(GetInteractionClassHandleResponse {
             result: Some(encode_interaction_class(h)),
         }),
-        None => exception_variant("NameNotFound", name),
+        None => exception_variant(HlaException::NameNotFound, name),
     }
 }
 
@@ -1573,7 +1604,7 @@ fn get_interaction_class_name(ctx: &SessionContext, h: fedpro::InteractionClassH
         Some(d) => Resp::GetInteractionClassNameResponse(GetInteractionClassNameResponse {
             result: d.name.clone(),
         }),
-        None => exception_variant("InvalidInteractionClassHandle", ""),
+        None => exception_variant(HlaException::InvalidInteractionClassHandle, ""),
     }
 }
 
@@ -1591,13 +1622,13 @@ fn get_parameter_handle(
         Err(HandleError::Invalid(n)) => return exception_variant(n, ""),
     };
     if m.federation.fom.interaction_class_def(class).is_none() {
-        return exception_variant("InvalidInteractionClassHandle", "");
+        return exception_variant(HlaException::InvalidInteractionClassHandle, "");
     }
     match m.federation.fom.parameter_handle(class, param_name) {
         Some(h) => Resp::GetParameterHandleResponse(GetParameterHandleResponse {
             result: Some(encode_parameter(h)),
         }),
-        None => exception_variant("NameNotFound", param_name),
+        None => exception_variant(HlaException::NameNotFound, param_name),
     }
 }
 
@@ -1620,7 +1651,7 @@ fn get_parameter_name(
     };
     let def = match m.federation.fom.interaction_class_def(class) {
         Some(d) => d,
-        None => return exception_variant("InvalidInteractionClassHandle", ""),
+        None => return exception_variant(HlaException::InvalidInteractionClassHandle, ""),
     };
     for p in &def.parameters {
         if let Some(h) = m.federation.fom.parameter_handle(class, &p.name)
@@ -1631,7 +1662,7 @@ fn get_parameter_name(
             });
         }
     }
-    exception_variant("InteractionParameterNotDefined", "")
+    exception_variant(HlaException::InteractionParameterNotDefined, "")
 }
 
 // -----------------------------------------------------------------------------
@@ -1658,14 +1689,14 @@ fn publish_object_class_attributes(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let class = match class.and_then(|h| decode_object_class(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("InvalidObjectClassHandle", ""),
+        None => return exception_variant(HlaException::InvalidObjectClassHandle, ""),
     };
     if m.federation.fom.object_class_def(class).is_none() {
-        return exception_variant("ObjectClassNotDefined", "");
+        return exception_variant(HlaException::ObjectClassNotDefined, "");
     }
     let set = match decode_handle_set(attrs) {
         Ok(s) => s,
@@ -1689,11 +1720,11 @@ fn unpublish_object_class_attributes(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let class = match class.and_then(|h| decode_object_class(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("InvalidObjectClassHandle", ""),
+        None => return exception_variant(HlaException::InvalidObjectClassHandle, ""),
     };
     let set = match decode_handle_set(attrs) {
         Ok(s) => s,
@@ -1722,14 +1753,14 @@ fn subscribe_object_class_attributes_inner(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let class = match class.and_then(|h| decode_object_class(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("InvalidObjectClassHandle", ""),
+        None => return exception_variant(HlaException::InvalidObjectClassHandle, ""),
     };
     if m.federation.fom.object_class_def(class).is_none() {
-        return exception_variant("ObjectClassNotDefined", "");
+        return exception_variant(HlaException::ObjectClassNotDefined, "");
     }
     let set = match decode_handle_set(attrs) {
         Ok(s) => s,
@@ -1886,11 +1917,11 @@ fn unsubscribe_object_class_attributes_inner(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let class = match class.and_then(|h| decode_object_class(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("InvalidObjectClassHandle", ""),
+        None => return exception_variant(HlaException::InvalidObjectClassHandle, ""),
     };
     let set = match decode_handle_set(attrs) {
         Ok(s) => s,
@@ -1929,7 +1960,7 @@ fn decode_interaction_or_err(
     h: Option<fedpro::InteractionClassHandle>,
 ) -> Result<InteractionClassHandle, Resp> {
     h.and_then(|x| decode_interaction_class(&x).ok())
-        .ok_or_else(|| exception_variant("InvalidInteractionClassHandle", ""))
+        .ok_or_else(|| exception_variant(HlaException::InvalidInteractionClassHandle, ""))
 }
 
 fn publish_interaction_class(
@@ -1938,14 +1969,14 @@ fn publish_interaction_class(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let class = match decode_interaction_or_err(class) {
         Ok(c) => c,
         Err(e) => return e,
     };
     if m.federation.fom.interaction_class_def(class).is_none() {
-        return exception_variant("InteractionClassNotDefined", "");
+        return exception_variant(HlaException::InteractionClassNotDefined, "");
     }
     let mut federates = m.federation.federates.write();
     if let Some(fs) = federates.get_mut(&m.federate_handle) {
@@ -1960,7 +1991,7 @@ fn unpublish_interaction_class(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let class = match decode_interaction_or_err(class) {
         Ok(c) => c,
@@ -1981,14 +2012,14 @@ fn subscribe_interaction_class_inner(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let class = match decode_interaction_or_err(class) {
         Ok(c) => c,
         Err(e) => return e,
     };
     if m.federation.fom.interaction_class_def(class).is_none() {
-        return exception_variant("InteractionClassNotDefined", "");
+        return exception_variant(HlaException::InteractionClassNotDefined, "");
     }
     let was_subscribed = interaction_has_subscribers(&m.federation, class);
     let mut federates = m.federation.federates.write();
@@ -2022,7 +2053,7 @@ fn unsubscribe_interaction_class_inner(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let class = match decode_interaction_or_err(class) {
         Ok(c) => c,
@@ -2067,21 +2098,21 @@ fn register_object_instance(
     let m = ctx
         .membership
         .as_ref()
-        .ok_or_else(|| exception_variant("FederateNotExecutionMember", ""))?
+        .ok_or_else(|| exception_variant(HlaException::FederateNotExecutionMember, ""))?
         .clone();
     let class = class
         .and_then(|h| decode_object_class(&h).ok())
-        .ok_or_else(|| exception_variant("InvalidObjectClassHandle", ""))?;
+        .ok_or_else(|| exception_variant(HlaException::InvalidObjectClassHandle, ""))?;
     if m.federation.fom.object_class_def(class).is_none() {
-        return Err(exception_variant("ObjectClassNotDefined", ""));
+        return Err(exception_variant(HlaException::ObjectClassNotDefined, ""));
     }
     {
         let federates = m.federation.federates.read();
         let fs = federates
             .get(&m.federate_handle)
-            .ok_or_else(|| exception_variant("FederateNotExecutionMember", ""))?;
+            .ok_or_else(|| exception_variant(HlaException::FederateNotExecutionMember, ""))?;
         if !fs.pub_sub.published_attrs.contains_key(&class) {
-            return Err(exception_variant("ObjectClassNotPublished", ""));
+            return Err(exception_variant(HlaException::ObjectClassNotPublished, ""));
         }
     }
 
@@ -2092,7 +2123,7 @@ fn register_object_instance(
         Some(n) => {
             let instances = m.federation.object_instances.read();
             if instances.values().any(|inst| inst.name == n) {
-                return Err(exception_variant("ObjectInstanceNameInUse", &n));
+                return Err(exception_variant(HlaException::ObjectInstanceNameInUse, &n));
             }
             n
         }
@@ -2109,7 +2140,7 @@ fn register_object_instance(
         let federates = m.federation.federates.read();
         let fs = federates
             .get(&m.federate_handle)
-            .ok_or_else(|| exception_variant("FederateNotExecutionMember", ""))?;
+            .ok_or_else(|| exception_variant(HlaException::FederateNotExecutionMember, ""))?;
         fs.pub_sub
             .published_attrs
             .get(&class)
@@ -2212,10 +2243,9 @@ fn decode_attribute_value_map(
         return Ok(out);
     };
     for entry in map.attribute_handle_value {
-        let handle = entry
-            .attribute_handle
-            .as_ref()
-            .ok_or_else(|| exception_variant("InvalidAttributeHandle", "missing handle"))?;
+        let handle = entry.attribute_handle.as_ref().ok_or_else(|| {
+            exception_variant(HlaException::InvalidAttributeHandle, "missing handle")
+        })?;
         let h =
             decode_attribute(handle).map_err(|HandleError::Invalid(n)| exception_variant(n, ""))?;
         out.insert(h, entry.value);
@@ -2231,10 +2261,9 @@ fn decode_parameter_value_map(
         return Ok(out);
     };
     for entry in map.parameter_handle_value {
-        let handle = entry
-            .parameter_handle
-            .as_ref()
-            .ok_or_else(|| exception_variant("InvalidParameterHandle", "missing handle"))?;
+        let handle = entry.parameter_handle.as_ref().ok_or_else(|| {
+            exception_variant(HlaException::InvalidParameterHandle, "missing handle")
+        })?;
         let h =
             decode_parameter(handle).map_err(|HandleError::Invalid(n)| exception_variant(n, ""))?;
         out.insert(h, entry.value);
@@ -2252,11 +2281,11 @@ fn update_attribute_values(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let instance_handle = match instance.and_then(|h| decode_object_instance(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("ObjectInstanceNotKnown", "missing handle"),
+        None => return exception_variant(HlaException::ObjectInstanceNotKnown, "missing handle"),
     };
     let values = match decode_attribute_value_map(values) {
         Ok(v) => v,
@@ -2271,12 +2300,12 @@ fn update_attribute_values(
         let instances = m.federation.object_instances.read();
         let inst = match instances.get(&instance_handle) {
             Some(i) => i,
-            None => return exception_variant("ObjectInstanceNotKnown", ""),
+            None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
         };
         for attr in values.keys() {
             match inst.attribute_owners.get(attr) {
                 Some(owner) if *owner == m.federate_handle => {}
-                _ => return exception_variant("AttributeNotOwned", ""),
+                _ => return exception_variant(HlaException::AttributeNotOwned, ""),
             }
         }
         let attrs: Vec<AttributeHandle> = values.keys().copied().collect();
@@ -2381,11 +2410,11 @@ fn update_attribute_values_with_time(
     use hla_fedpro_proto::fedpro::UpdateAttributeValuesWithTimeResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let instance_handle = match instance.and_then(|h| decode_object_instance(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("ObjectInstanceNotKnown", ""),
+        None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
     };
     let values = match decode_attribute_value_map(values) {
         Ok(v) => v,
@@ -2394,7 +2423,7 @@ fn update_attribute_values_with_time(
     let time = match time.as_ref().map(decode_logical_time) {
         Some(Ok(t)) => t,
         Some(Err(n)) => return exception_variant(n, ""),
-        None => return exception_variant("InvalidLogicalTime", ""),
+        None => return exception_variant(HlaException::InvalidLogicalTime, ""),
     };
 
     // Validate ownership per-attribute.
@@ -2402,12 +2431,12 @@ fn update_attribute_values_with_time(
         let instances = m.federation.object_instances.read();
         let inst = match instances.get(&instance_handle) {
             Some(i) => i,
-            None => return exception_variant("ObjectInstanceNotKnown", ""),
+            None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
         };
         for attr in values.keys() {
             match inst.attribute_owners.get(attr) {
                 Some(owner) if *owner == m.federate_handle => {}
-                _ => return exception_variant("AttributeNotOwned", ""),
+                _ => return exception_variant(HlaException::AttributeNotOwned, ""),
             }
         }
         let attrs: Vec<AttributeHandle> = values.keys().copied().collect();
@@ -2423,7 +2452,7 @@ fn update_attribute_values_with_time(
             let lbts = fs.time.current_time + fs.time.lookahead;
             if time < lbts {
                 return exception_variant(
-                    "InvalidLogicalTime",
+                    HlaException::InvalidLogicalTime,
                     &format!("time {time} < current+lookahead {lbts}"),
                 );
             }
@@ -2543,23 +2572,23 @@ fn send_interaction_with_time(
     use hla_fedpro_proto::fedpro::SendInteractionWithTimeResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let class = match class.and_then(|h| decode_interaction_class(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("InvalidInteractionClassHandle", ""),
+        None => return exception_variant(HlaException::InvalidInteractionClassHandle, ""),
     };
     if m.federation.fom.interaction_class_def(class).is_none() {
-        return exception_variant("InteractionClassNotDefined", "");
+        return exception_variant(HlaException::InteractionClassNotDefined, "");
     }
     {
         let federates = m.federation.federates.read();
         let fs = match federates.get(&m.federate_handle) {
             Some(f) => f,
-            None => return exception_variant("FederateNotExecutionMember", ""),
+            None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
         };
         if !fs.pub_sub.published_interactions.contains(&class) {
-            return exception_variant("InteractionClassNotPublished", "");
+            return exception_variant(HlaException::InteractionClassNotPublished, "");
         }
     }
     let params = match decode_parameter_value_map(params) {
@@ -2569,7 +2598,7 @@ fn send_interaction_with_time(
     let time = match time.as_ref().map(decode_logical_time) {
         Some(Ok(t)) => t,
         Some(Err(n)) => return exception_variant(n, ""),
-        None => return exception_variant("InvalidLogicalTime", ""),
+        None => return exception_variant(HlaException::InvalidLogicalTime, ""),
     };
 
     let subscribers = subscribers_for_interaction(&m.federation, class, Some(m.federate_handle));
@@ -2589,26 +2618,26 @@ fn delete_object_instance_with_time(
     use hla_fedpro_proto::fedpro::DeleteObjectInstanceWithTimeResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let instance_handle = match instance.and_then(|h| decode_object_instance(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("ObjectInstanceNotKnown", ""),
+        None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
     };
     let time = match time.as_ref().map(decode_logical_time) {
         Some(Ok(t)) => t,
         Some(Err(n)) => return exception_variant(n, ""),
-        None => return exception_variant("InvalidLogicalTime", ""),
+        None => return exception_variant(HlaException::InvalidLogicalTime, ""),
     };
 
     let class = {
         let mut instances = m.federation.object_instances.write();
         let inst = match instances.get(&instance_handle) {
             Some(i) => i,
-            None => return exception_variant("ObjectInstanceNotKnown", ""),
+            None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
         };
         if inst.registrar != m.federate_handle {
-            return exception_variant("DeletePrivilegeNotHeld", "");
+            return exception_variant(HlaException::DeletePrivilegeNotHeld, "");
         }
         let class = inst.class;
         instances.remove(&instance_handle);
@@ -2647,23 +2676,23 @@ fn send_interaction(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let class = match class.and_then(|h| decode_interaction_class(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("InvalidInteractionClassHandle", ""),
+        None => return exception_variant(HlaException::InvalidInteractionClassHandle, ""),
     };
     if m.federation.fom.interaction_class_def(class).is_none() {
-        return exception_variant("InteractionClassNotDefined", "");
+        return exception_variant(HlaException::InteractionClassNotDefined, "");
     }
     {
         let federates = m.federation.federates.read();
         let fs = match federates.get(&m.federate_handle) {
             Some(f) => f,
-            None => return exception_variant("FederateNotExecutionMember", ""),
+            None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
         };
         if !fs.pub_sub.published_interactions.contains(&class) {
-            return exception_variant("InteractionClassNotPublished", "");
+            return exception_variant(HlaException::InteractionClassNotPublished, "");
         }
     }
     let params = match decode_parameter_value_map(params) {
@@ -2690,21 +2719,21 @@ fn delete_object_instance(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let instance_handle = match instance.and_then(|h| decode_object_instance(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("ObjectInstanceNotKnown", ""),
+        None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
     };
     // Remove + record the class for subscriber lookup.
     let class = {
         let mut instances = m.federation.object_instances.write();
         let inst = match instances.get(&instance_handle) {
             Some(i) => i,
-            None => return exception_variant("ObjectInstanceNotKnown", ""),
+            None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
         };
         if inst.registrar != m.federate_handle {
-            return exception_variant("DeletePrivilegeNotHeld", "");
+            return exception_variant(HlaException::DeletePrivilegeNotHeld, "");
         }
         let class = inst.class;
         instances.remove(&instance_handle);
@@ -2749,10 +2778,10 @@ fn request_federation_restore(
     use hla_fedpro_proto::fedpro::RequestFederationRestoreResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     if label.is_empty() {
-        return exception_variant("InvalidRestoreLabel", "");
+        return exception_variant(HlaException::InvalidRestoreLabel, "");
     }
 
     // Try to load the snapshot from disk before initiating restore. If
@@ -2789,7 +2818,7 @@ fn request_federation_restore(
     let initiated = {
         let mut current = m.federation.current_restore.write();
         if current.is_some() {
-            return exception_variant("RestoreInProgress", "");
+            return exception_variant(HlaException::RestoreInProgress, "");
         }
         *current = Some(RestoreOperation {
             label: label.clone(),
@@ -2854,14 +2883,14 @@ fn federate_restore_progressed(
     };
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
 
     let outcome = {
         let mut current = m.federation.current_restore.write();
         let restore = match current.as_mut() {
             Some(r) => r,
-            None => return exception_variant("RestoreNotInProgress", ""),
+            None => return exception_variant(HlaException::RestoreNotInProgress, ""),
         };
         let new_status = if successfully {
             RestoreStatus::Complete
@@ -2908,11 +2937,11 @@ fn abort_federation_restore(ctx: &mut SessionContext) -> Resp {
     use hla_fedpro_proto::fedpro::AbortFederationRestoreResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let mut current = m.federation.current_restore.write();
     if current.is_none() {
-        return exception_variant("RestoreNotInProgress", "");
+        return exception_variant(HlaException::RestoreNotInProgress, "");
     }
     current.take();
     Resp::AbortFederationRestoreResponse(AbortFederationRestoreResponse {})
@@ -2968,14 +2997,14 @@ fn subscribe_object_class_attributes_with_regions(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let class = match class.and_then(|h| decode_object_class(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("InvalidObjectClassHandle", ""),
+        None => return exception_variant(HlaException::InvalidObjectClassHandle, ""),
     };
     if m.federation.fom.object_class_def(class).is_none() {
-        return exception_variant("ObjectClassNotDefined", "");
+        return exception_variant(HlaException::ObjectClassNotDefined, "");
     }
     let attr_regions = decode_attr_region_pairs(pairs);
     let was_subscribed = class_has_subscribers(&m.federation, class);
@@ -3018,11 +3047,11 @@ fn unsubscribe_object_class_attributes_with_regions(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let class = match class.and_then(|h| decode_object_class(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("InvalidObjectClassHandle", ""),
+        None => return exception_variant(HlaException::InvalidObjectClassHandle, ""),
     };
     let attr_regions = decode_attr_region_pairs(pairs);
     let mut federates = m.federation.federates.write();
@@ -3087,11 +3116,11 @@ fn publish_object_class_directed_interactions(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let class = match class.and_then(|h| decode_object_class(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("InvalidObjectClassHandle", ""),
+        None => return exception_variant(HlaException::InvalidObjectClassHandle, ""),
     };
     let ix = decode_interaction_class_set(interactions);
     let mut federates = m.federation.federates.write();
@@ -3114,11 +3143,11 @@ fn unpublish_object_class_directed_interactions(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let class = match class.and_then(|h| decode_object_class(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("InvalidObjectClassHandle", ""),
+        None => return exception_variant(HlaException::InvalidObjectClassHandle, ""),
     };
     let mut federates = m.federation.federates.write();
     if let Some(fs) = federates.get_mut(&m.federate_handle) {
@@ -3151,11 +3180,11 @@ fn subscribe_object_class_directed_interactions(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let class = match class.and_then(|h| decode_object_class(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("InvalidObjectClassHandle", ""),
+        None => return exception_variant(HlaException::InvalidObjectClassHandle, ""),
     };
     let ix = decode_interaction_class_set(interactions);
     let mut federates = m.federation.federates.write();
@@ -3178,11 +3207,11 @@ fn unsubscribe_object_class_directed_interactions(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let class = match class.and_then(|h| decode_object_class(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("InvalidObjectClassHandle", ""),
+        None => return exception_variant(HlaException::InvalidObjectClassHandle, ""),
     };
     let mut federates = m.federation.federates.write();
     if let Some(fs) = federates.get_mut(&m.federate_handle) {
@@ -3220,15 +3249,15 @@ fn send_directed_interaction(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let class = match class.and_then(|h| decode_interaction_class(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("InvalidInteractionClassHandle", ""),
+        None => return exception_variant(HlaException::InvalidInteractionClassHandle, ""),
     };
     let instance_h = match instance.and_then(|h| decode_object_instance(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("ObjectInstanceNotKnown", ""),
+        None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
     };
     let params = match decode_parameter_value_map(params) {
         Ok(v) => v,
@@ -3240,7 +3269,7 @@ fn send_directed_interaction(
         let instances = m.federation.object_instances.read();
         match instances.get(&instance_h) {
             Some(i) => (i.class, i.registrar),
-            None => return exception_variant("ObjectInstanceNotKnown", ""),
+            None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
         }
     };
 
@@ -3375,7 +3404,7 @@ fn create_region(
     let _ = node;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let dims: HashMap<hla_core::DimensionHandle, (u32, u32)> = dimensions
         .map(|d| {
@@ -3417,7 +3446,7 @@ fn commit_region_modifications(
     use hla_fedpro_proto::fedpro::CommitRegionModificationsResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let region_handles: Vec<hla_core::RegionHandle> = regions
         .map(|s| {
@@ -3439,7 +3468,7 @@ fn commit_region_modifications(
     for rh in region_handles {
         if let Some(r) = regions.get_mut(&rh) {
             if r.owner != m.federate_handle {
-                return exception_variant("RegionNotCreatedByThisFederate", "");
+                return exception_variant(HlaException::RegionNotCreatedByThisFederate, "");
             }
             r.committed = r.staged.clone();
         }
@@ -3451,13 +3480,13 @@ fn delete_region(ctx: &SessionContext, region: Option<fedpro::RegionHandle>) -> 
     use hla_fedpro_proto::fedpro::DeleteRegionResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let rh = match region {
         Some(h) if h.data.len() == 8 => {
             hla_core::RegionHandle::new(u64::from_be_bytes(h.data[..].try_into().unwrap()))
         }
-        _ => return exception_variant("InvalidRegion", ""),
+        _ => return exception_variant(HlaException::InvalidRegion, ""),
     };
     let mut regions = m.federation.regions.write();
     match regions.get(&rh) {
@@ -3465,8 +3494,8 @@ fn delete_region(ctx: &SessionContext, region: Option<fedpro::RegionHandle>) -> 
             regions.remove(&rh);
             Resp::DeleteRegionResponse(DeleteRegionResponse {})
         }
-        Some(_) => exception_variant("RegionNotCreatedByThisFederate", ""),
-        None => exception_variant("InvalidRegion", ""),
+        Some(_) => exception_variant(HlaException::RegionNotCreatedByThisFederate, ""),
+        None => exception_variant(HlaException::InvalidRegion, ""),
     }
 }
 
@@ -3478,24 +3507,24 @@ fn get_range_bounds(
     use hla_fedpro_proto::fedpro::{GetRangeBoundsResponse, RangeBounds};
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let rh = match region {
         Some(h) if h.data.len() == 8 => {
             hla_core::RegionHandle::new(u64::from_be_bytes(h.data[..].try_into().unwrap()))
         }
-        _ => return exception_variant("InvalidRegion", ""),
+        _ => return exception_variant(HlaException::InvalidRegion, ""),
     };
     let dh = match dimension {
         Some(h) if h.data.len() == 4 => {
             hla_core::DimensionHandle::new(u32::from_be_bytes(h.data[..].try_into().unwrap()))
         }
-        _ => return exception_variant("InvalidDimension", ""),
+        _ => return exception_variant(HlaException::InvalidDimension, ""),
     };
     let regions = m.federation.regions.read();
     let r = match regions.get(&rh) {
         Some(r) => r,
-        None => return exception_variant("InvalidRegion", ""),
+        None => return exception_variant(HlaException::InvalidRegion, ""),
     };
     let bounds = r.committed.get(&dh).copied().unwrap_or((0, u32::MAX));
     Resp::GetRangeBoundsResponse(GetRangeBoundsResponse {
@@ -3515,24 +3544,24 @@ fn set_range_bounds(
     use hla_fedpro_proto::fedpro::SetRangeBoundsResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let rh = match region {
         Some(h) if h.data.len() == 8 => {
             hla_core::RegionHandle::new(u64::from_be_bytes(h.data[..].try_into().unwrap()))
         }
-        _ => return exception_variant("InvalidRegion", ""),
+        _ => return exception_variant(HlaException::InvalidRegion, ""),
     };
     let dh = match dimension {
         Some(h) if h.data.len() == 4 => {
             hla_core::DimensionHandle::new(u32::from_be_bytes(h.data[..].try_into().unwrap()))
         }
-        _ => return exception_variant("InvalidDimension", ""),
+        _ => return exception_variant(HlaException::InvalidDimension, ""),
     };
     let bounds = match bounds {
         Some(b) if b.lower <= b.upper => (b.lower, b.upper),
-        Some(_) => return exception_variant("InvalidRangeBound", "lower > upper"),
-        None => return exception_variant("InvalidRangeBound", "missing"),
+        Some(_) => return exception_variant(HlaException::InvalidRangeBound, "lower > upper"),
+        None => return exception_variant(HlaException::InvalidRangeBound, "missing"),
     };
     let mut regions = m.federation.regions.write();
     match regions.get_mut(&rh) {
@@ -3540,8 +3569,8 @@ fn set_range_bounds(
             r.staged.insert(dh, bounds);
             Resp::SetRangeBoundsResponse(SetRangeBoundsResponse {})
         }
-        Some(_) => exception_variant("RegionNotCreatedByThisFederate", ""),
-        None => exception_variant("InvalidRegion", ""),
+        Some(_) => exception_variant(HlaException::RegionNotCreatedByThisFederate, ""),
+        None => exception_variant(HlaException::InvalidRegion, ""),
     }
 }
 
@@ -3553,14 +3582,14 @@ fn get_object_instance_handle(ctx: &SessionContext, name: &str) -> Resp {
     use hla_fedpro_proto::fedpro::GetObjectInstanceHandleResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let instances = m.federation.object_instances.read();
     match instances.values().find(|i| i.name == name) {
         Some(inst) => Resp::GetObjectInstanceHandleResponse(GetObjectInstanceHandleResponse {
             result: Some(crate::handles::encode_object_instance(inst.handle)),
         }),
-        None => exception_variant("ObjectInstanceNotKnown", name),
+        None => exception_variant(HlaException::ObjectInstanceNotKnown, name),
     }
 }
 
@@ -3571,18 +3600,18 @@ fn get_object_instance_name(
     use hla_fedpro_proto::fedpro::GetObjectInstanceNameResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let h = match instance.and_then(|h| decode_object_instance(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("ObjectInstanceNotKnown", ""),
+        None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
     };
     let instances = m.federation.object_instances.read();
     match instances.get(&h) {
         Some(inst) => Resp::GetObjectInstanceNameResponse(GetObjectInstanceNameResponse {
             result: inst.name.clone(),
         }),
-        None => exception_variant("ObjectInstanceNotKnown", ""),
+        None => exception_variant(HlaException::ObjectInstanceNotKnown, ""),
     }
 }
 
@@ -3593,18 +3622,18 @@ fn get_known_object_class_handle(
     use hla_fedpro_proto::fedpro::GetKnownObjectClassHandleResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let h = match instance.and_then(|h| decode_object_instance(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("ObjectInstanceNotKnown", ""),
+        None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
     };
     let instances = m.federation.object_instances.read();
     match instances.get(&h) {
         Some(inst) => Resp::GetKnownObjectClassHandleResponse(GetKnownObjectClassHandleResponse {
             result: Some(crate::handles::encode_object_class(inst.class)),
         }),
-        None => exception_variant("ObjectInstanceNotKnown", ""),
+        None => exception_variant(HlaException::ObjectInstanceNotKnown, ""),
     }
 }
 
@@ -3615,11 +3644,11 @@ fn local_delete_object_instance(
     use hla_fedpro_proto::fedpro::LocalDeleteObjectInstanceResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let h = match instance.and_then(|h| decode_object_instance(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("ObjectInstanceNotKnown", ""),
+        None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
     };
     // Per IEEE 1516.1: federate forgets about the instance locally (no
     // cross-federation effect). Remove from `discovered_instances`.
@@ -3634,7 +3663,7 @@ fn get_dimension_handle(ctx: &SessionContext, name: &str) -> Resp {
     use hla_fedpro_proto::fedpro::GetDimensionHandleResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     match m.federation.fom.dimension_handle(name) {
         Some(h) => Resp::GetDimensionHandleResponse(GetDimensionHandleResponse {
@@ -3642,7 +3671,7 @@ fn get_dimension_handle(ctx: &SessionContext, name: &str) -> Resp {
                 data: h.raw().to_be_bytes().to_vec(),
             }),
         }),
-        None => exception_variant("NameNotFound", name),
+        None => exception_variant(HlaException::NameNotFound, name),
     }
 }
 
@@ -3651,7 +3680,7 @@ fn get_dimension_name(ctx: &SessionContext, dimension: Option<fedpro::DimensionH
     let _ = ctx;
     let h = match dimension {
         Some(d) if d.data.len() == 4 => u32::from_be_bytes(d.data[..].try_into().unwrap()),
-        _ => return exception_variant("InvalidDimensionHandle", ""),
+        _ => return exception_variant(HlaException::InvalidDimensionHandle, ""),
     };
     // MVP: we don't yet store dimension names by handle. Return the raw id.
     Resp::GetDimensionNameResponse(GetDimensionNameResponse {
@@ -3673,18 +3702,18 @@ fn get_dimension_handle_set(ctx: &SessionContext, region: Option<fedpro::RegionH
     use hla_fedpro_proto::fedpro::{DimensionHandleSet, GetDimensionHandleSetResponse};
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let rh = match region {
         Some(h) if h.data.len() == 8 => {
             hla_core::RegionHandle::new(u64::from_be_bytes(h.data[..].try_into().unwrap()))
         }
-        _ => return exception_variant("InvalidRegion", ""),
+        _ => return exception_variant(HlaException::InvalidRegion, ""),
     };
     let regions = m.federation.regions.read();
     let r = match regions.get(&rh) {
         Some(r) => r,
-        None => return exception_variant("InvalidRegion", ""),
+        None => return exception_variant(HlaException::InvalidRegion, ""),
     };
     let dims: Vec<fedpro::DimensionHandle> = r
         .committed
@@ -3746,12 +3775,12 @@ where
 {
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let federates = m.federation.federates.read();
     match federates.get(&m.federate_handle) {
         Some(fs) => wrap(getter(&fs.switches)),
-        None => exception_variant("FederateNotExecutionMember", ""),
+        None => exception_variant(HlaException::FederateNotExecutionMember, ""),
     }
 }
 
@@ -3762,7 +3791,7 @@ where
 {
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let mut federates = m.federation.federates.write();
     match federates.get_mut(&m.federate_handle) {
@@ -3770,7 +3799,7 @@ where
             setter(&mut fs.switches, value);
             wrap()
         }
-        None => exception_variant("FederateNotExecutionMember", ""),
+        None => exception_variant(HlaException::FederateNotExecutionMember, ""),
     }
 }
 
@@ -3778,12 +3807,12 @@ fn get_automatic_resign_directive(ctx: &SessionContext) -> Resp {
     use hla_fedpro_proto::fedpro::GetAutomaticResignDirectiveResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let federates = m.federation.federates.read();
     let fs = match federates.get(&m.federate_handle) {
         Some(f) => f,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     Resp::GetAutomaticResignDirectiveResponse(GetAutomaticResignDirectiveResponse {
         result: encode_resign_action(fs.switches.automatic_resign_directive),
@@ -3794,7 +3823,7 @@ fn set_automatic_resign_directive(ctx: &mut SessionContext, value: i32) -> Resp 
     use hla_fedpro_proto::fedpro::SetAutomaticResignDirectiveResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let action = match value {
         0 => hla_core::ResignAction::UnconditionallyDivestAttributes,
@@ -3803,7 +3832,7 @@ fn set_automatic_resign_directive(ctx: &mut SessionContext, value: i32) -> Resp 
         3 => hla_core::ResignAction::DeleteObjectsThenDivest,
         4 => hla_core::ResignAction::CancelThenDeleteThenDivest,
         5 => hla_core::ResignAction::NoAction,
-        other => return exception_variant("InvalidResignAction", &other.to_string()),
+        other => return exception_variant(HlaException::InvalidResignAction, &other.to_string()),
     };
     let mut federates = m.federation.federates.write();
     match federates.get_mut(&m.federate_handle) {
@@ -3811,7 +3840,7 @@ fn set_automatic_resign_directive(ctx: &mut SessionContext, value: i32) -> Resp 
             fs.switches.automatic_resign_directive = action;
             Resp::SetAutomaticResignDirectiveResponse(SetAutomaticResignDirectiveResponse {})
         }
-        None => exception_variant("FederateNotExecutionMember", ""),
+        None => exception_variant(HlaException::FederateNotExecutionMember, ""),
     }
 }
 
@@ -3835,14 +3864,14 @@ fn get_federate_handle(ctx: &SessionContext, name: &str) -> Resp {
     use hla_fedpro_proto::fedpro::GetFederateHandleResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let federates = m.federation.federates.read();
     match federates.values().find(|f| f.name == name) {
         Some(fs) => Resp::GetFederateHandleResponse(GetFederateHandleResponse {
             result: Some(encode_federate(fs.handle)),
         }),
-        None => exception_variant("NameNotFound", name),
+        None => exception_variant(HlaException::NameNotFound, name),
     }
 }
 
@@ -3850,18 +3879,18 @@ fn get_federate_name(ctx: &SessionContext, handle: fedpro::FederateHandle) -> Re
     use hla_fedpro_proto::fedpro::GetFederateNameResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let fh = match handle.data.len() {
         4 => FederateHandle::new(u32::from_be_bytes(handle.data[..].try_into().unwrap())),
-        _ => return exception_variant("InvalidFederateHandle", ""),
+        _ => return exception_variant(HlaException::InvalidFederateHandle, ""),
     };
     let federates = m.federation.federates.read();
     match federates.get(&fh) {
         Some(fs) => Resp::GetFederateNameResponse(GetFederateNameResponse {
             result: fs.name.clone(),
         }),
-        None => exception_variant("InvalidFederateHandle", ""),
+        None => exception_variant(HlaException::InvalidFederateHandle, ""),
     }
 }
 
@@ -3871,7 +3900,7 @@ fn get_order_type(name: &str) -> Resp {
     let raw = match name {
         "Receive" => 0i32,
         "TimeStamp" | "TimestampOrder" => 1i32,
-        _ => return exception_variant("InvalidOrderName", name),
+        _ => return exception_variant(HlaException::InvalidOrderName, name),
     };
     Resp::GetOrderTypeResponse(GetOrderTypeResponse { result: raw })
 }
@@ -3881,7 +3910,7 @@ fn get_order_name(order_type: i32) -> Resp {
     let name = match order_type {
         0 => "Receive",
         1 => "TimeStamp",
-        _ => return exception_variant("InvalidOrderType", &order_type.to_string()),
+        _ => return exception_variant(HlaException::InvalidOrderType, &order_type.to_string()),
     };
     Resp::GetOrderNameResponse(GetOrderNameResponse {
         result: name.to_string(),
@@ -3894,7 +3923,7 @@ fn get_transportation_type_handle(name: &str) -> Resp {
     let raw: u32 = match name {
         "HLAreliable" => 1,
         "HLAbestEffort" => 2,
-        _ => return exception_variant("InvalidTransportationName", name),
+        _ => return exception_variant(HlaException::InvalidTransportationName, name),
     };
     Resp::GetTransportationTypeHandleResponse(GetTransportationTypeHandleResponse {
         result: Some(TransportationTypeHandle {
@@ -3906,13 +3935,18 @@ fn get_transportation_type_handle(name: &str) -> Resp {
 fn get_transportation_type_name(handle: fedpro::TransportationTypeHandle) -> Resp {
     use hla_fedpro_proto::fedpro::GetTransportationTypeNameResponse;
     if handle.data.len() != 4 {
-        return exception_variant("InvalidTransportationTypeHandle", "");
+        return exception_variant(HlaException::InvalidTransportationTypeHandle, "");
     }
     let raw = u32::from_be_bytes(handle.data[..].try_into().unwrap());
     let name = match raw {
         1 => "HLAreliable",
         2 => "HLAbestEffort",
-        _ => return exception_variant("InvalidTransportationTypeHandle", &raw.to_string()),
+        _ => {
+            return exception_variant(
+                HlaException::InvalidTransportationTypeHandle,
+                &raw.to_string(),
+            );
+        }
     };
     Resp::GetTransportationTypeNameResponse(GetTransportationTypeNameResponse {
         result: name.to_string(),
@@ -3932,10 +3966,10 @@ fn request_federation_save(
     use hla_fedpro_proto::fedpro::RequestFederationSaveResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     if label.is_empty() {
-        return exception_variant("InvalidSaveLabel", "");
+        return exception_variant(HlaException::InvalidSaveLabel, "");
     }
 
     let participants: Vec<FederateHandle> =
@@ -3944,7 +3978,7 @@ fn request_federation_save(
     {
         let mut current = m.federation.current_save.write();
         if current.is_some() {
-            return exception_variant("SaveInProgress", "");
+            return exception_variant(HlaException::SaveInProgress, "");
         }
         *current = Some(SaveOperation {
             label: label.clone(),
@@ -3970,12 +4004,12 @@ fn federate_save_begun(ctx: &mut SessionContext) -> Resp {
     use hla_fedpro_proto::fedpro::FederateSaveBegunResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let mut current = m.federation.current_save.write();
     let save = match current.as_mut() {
         Some(s) => s,
-        None => return exception_variant("SaveNotInProgress", ""),
+        None => return exception_variant(HlaException::SaveNotInProgress, ""),
     };
     match save.statuses.get(&m.federate_handle) {
         Some(SaveStatus::Initiated) => {
@@ -3983,8 +4017,8 @@ fn federate_save_begun(ctx: &mut SessionContext) -> Resp {
                 .insert(m.federate_handle, SaveStatus::BegunSave);
             Resp::FederateSaveBegunResponse(FederateSaveBegunResponse {})
         }
-        Some(_) => exception_variant("FederateNotInSaveInitiated", ""),
-        None => exception_variant("FederateNotInSaveSet", ""),
+        Some(_) => exception_variant(HlaException::FederateNotInSaveInitiated, ""),
+        None => exception_variant(HlaException::FederateNotInSaveSet, ""),
     }
 }
 
@@ -3997,14 +4031,14 @@ fn federate_save_progressed(
     use hla_fedpro_proto::fedpro::{FederateSaveCompleteResponse, FederateSaveNotCompleteResponse};
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
 
     let outcome = {
         let mut current = m.federation.current_save.write();
         let save = match current.as_mut() {
             Some(s) => s,
-            None => return exception_variant("SaveNotInProgress", ""),
+            None => return exception_variant(HlaException::SaveNotInProgress, ""),
         };
         let new_status = if successfully {
             SaveStatus::SaveComplete
@@ -4076,11 +4110,11 @@ fn abort_federation_save(ctx: &mut SessionContext) -> Resp {
     use hla_fedpro_proto::fedpro::AbortFederationSaveResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let mut current = m.federation.current_save.write();
     if current.is_none() {
-        return exception_variant("SaveNotInProgress", "");
+        return exception_variant(HlaException::SaveNotInProgress, "");
     }
     current.take();
     Resp::AbortFederationSaveResponse(AbortFederationSaveResponse {})
@@ -4098,20 +4132,20 @@ fn is_attribute_owned_by_federate(
     use hla_fedpro_proto::fedpro::IsAttributeOwnedByFederateResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let instance = match instance.and_then(|h| decode_object_instance(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("ObjectInstanceNotKnown", ""),
+        None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
     };
     let attribute = match attribute.and_then(|h| decode_attribute(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("InvalidAttributeHandle", ""),
+        None => return exception_variant(HlaException::InvalidAttributeHandle, ""),
     };
     let instances = m.federation.object_instances.read();
     let inst = match instances.get(&instance) {
         Some(i) => i,
-        None => return exception_variant("ObjectInstanceNotKnown", ""),
+        None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
     };
     let owned = inst.attribute_owners.get(&attribute) == Some(&m.federate_handle);
     Resp::IsAttributeOwnedByFederateResponse(IsAttributeOwnedByFederateResponse { result: owned })
@@ -4127,11 +4161,11 @@ fn query_attribute_ownership(
     use hla_fedpro_proto::fedpro::QueryAttributeOwnershipResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let instance_h = match instance.and_then(|h| decode_object_instance(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("ObjectInstanceNotKnown", ""),
+        None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
     };
     let attrs = match decode_handle_set(attrs) {
         Ok(s) => s,
@@ -4143,7 +4177,7 @@ fn query_attribute_ownership(
         let instances = m.federation.object_instances.read();
         let inst = match instances.get(&instance_h) {
             Some(i) => i,
-            None => return exception_variant("ObjectInstanceNotKnown", ""),
+            None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
         };
         let mut groups: std::collections::HashMap<Option<FederateHandle>, Vec<AttributeHandle>> =
             std::collections::HashMap::new();
@@ -4176,11 +4210,11 @@ fn attribute_ownership_acquisition_if_available(
     use hla_fedpro_proto::fedpro::AttributeOwnershipAcquisitionIfAvailableResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let instance_h = match instance.and_then(|h| decode_object_instance(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("ObjectInstanceNotKnown", ""),
+        None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
     };
     let attrs = match decode_handle_set(attrs) {
         Ok(s) => s,
@@ -4191,7 +4225,7 @@ fn attribute_ownership_acquisition_if_available(
         let mut instances = m.federation.object_instances.write();
         let inst = match instances.get_mut(&instance_h) {
             Some(i) => i,
-            None => return exception_variant("ObjectInstanceNotKnown", ""),
+            None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
         };
         let mut secured = Vec::new();
         let mut unavailable = Vec::new();
@@ -4239,11 +4273,11 @@ fn unconditional_attribute_ownership_divestiture(
     use hla_fedpro_proto::fedpro::UnconditionalAttributeOwnershipDivestitureResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let instance_h = match instance.and_then(|h| decode_object_instance(&h).ok()) {
         Some(h) => h,
-        None => return exception_variant("ObjectInstanceNotKnown", ""),
+        None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
     };
     let attrs = match decode_handle_set(attrs) {
         Ok(s) => s,
@@ -4255,7 +4289,7 @@ fn unconditional_attribute_ownership_divestiture(
         let mut instances = m.federation.object_instances.write();
         let inst = match instances.get_mut(&instance_h) {
             Some(i) => i,
-            None => return exception_variant("ObjectInstanceNotKnown", ""),
+            None => return exception_variant(HlaException::ObjectInstanceNotKnown, ""),
         };
         let mut divested = Vec::new();
         for a in &attrs {
@@ -4313,11 +4347,11 @@ fn register_synchronization_point(
 
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     if label.is_empty() {
         return exception_variant(
-            "InvalidSynchronizationPointLabel",
+            HlaException::InvalidSynchronizationPointLabel,
             "label must not be empty",
         );
     }
@@ -4389,18 +4423,23 @@ fn synchronization_point_achieved(
 
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
 
     let synced_now = {
         let mut sync_points = m.federation.sync_points.write();
         let sp = match sync_points.get_mut(&label) {
             Some(s) => s,
-            None => return exception_variant("SynchronizationPointLabelNotAnnounced", &label),
+            None => {
+                return exception_variant(
+                    HlaException::SynchronizationPointLabelNotAnnounced,
+                    &label,
+                );
+            }
         };
         if !sp.participants.contains(&m.federate_handle) {
             return exception_variant(
-                "FederateNotInSynchronizationGroup",
+                HlaException::FederateNotInSynchronizationGroup,
                 &format!(
                     "federate {} not in sync set for {label}",
                     m.federate_handle.raw()
@@ -4443,23 +4482,23 @@ fn enable_time_regulation(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let lookahead = match lookahead.as_ref().map(decode_logical_time_interval) {
         Some(Ok(v)) if v.is_finite() && v >= 0.0 => v,
-        Some(Ok(v)) => return exception_variant("InvalidLookahead", &v.to_string()),
+        Some(Ok(v)) => return exception_variant(HlaException::InvalidLookahead, &v.to_string()),
         Some(Err(n)) => return exception_variant(n, ""),
-        None => return exception_variant("InvalidLookahead", "missing"),
+        None => return exception_variant(HlaException::InvalidLookahead, "missing"),
     };
 
     let now = {
         let mut federates = m.federation.federates.write();
         let fs = match federates.get_mut(&m.federate_handle) {
             Some(f) => f,
-            None => return exception_variant("FederateNotExecutionMember", ""),
+            None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
         };
         if fs.time.is_regulating {
-            return exception_variant("TimeRegulationAlreadyEnabled", "");
+            return exception_variant(HlaException::TimeRegulationAlreadyEnabled, "");
         }
         fs.time.is_regulating = true;
         fs.time.lookahead = lookahead;
@@ -4485,16 +4524,16 @@ fn disable_time_regulation(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     {
         let mut federates = m.federation.federates.write();
         let fs = match federates.get_mut(&m.federate_handle) {
             Some(f) => f,
-            None => return exception_variant("FederateNotExecutionMember", ""),
+            None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
         };
         if !fs.time.is_regulating {
-            return exception_variant("TimeRegulationIsNotEnabled", "");
+            return exception_variant(HlaException::TimeRegulationIsNotEnabled, "");
         }
         fs.time.is_regulating = false;
     }
@@ -4509,16 +4548,16 @@ fn enable_time_constrained(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let now = {
         let mut federates = m.federation.federates.write();
         let fs = match federates.get_mut(&m.federate_handle) {
             Some(f) => f,
-            None => return exception_variant("FederateNotExecutionMember", ""),
+            None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
         };
         if fs.time.is_constrained {
-            return exception_variant("TimeConstrainedAlreadyEnabled", "");
+            return exception_variant(HlaException::TimeConstrainedAlreadyEnabled, "");
         }
         fs.time.is_constrained = true;
         fs.time.current_time
@@ -4531,15 +4570,15 @@ fn enable_time_constrained(
 fn disable_time_constrained(ctx: &mut SessionContext) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let mut federates = m.federation.federates.write();
     let fs = match federates.get_mut(&m.federate_handle) {
         Some(f) => f,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     if !fs.time.is_constrained {
-        return exception_variant("TimeConstrainedIsNotEnabled", "");
+        return exception_variant(HlaException::TimeConstrainedIsNotEnabled, "");
     }
     fs.time.is_constrained = false;
     Resp::DisableTimeConstrainedResponse(DisableTimeConstrainedResponse {})
@@ -4553,26 +4592,28 @@ fn time_advance_request(
 ) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m.clone(),
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let requested = match time.as_ref().map(decode_logical_time) {
         Some(Ok(v)) if v.is_finite() => v,
-        Some(Ok(v)) => return exception_variant("LogicalTimeAlreadyPassed", &v.to_string()),
+        Some(Ok(v)) => {
+            return exception_variant(HlaException::LogicalTimeAlreadyPassed, &v.to_string());
+        }
         Some(Err(n)) => return exception_variant(n, ""),
-        None => return exception_variant("InvalidLogicalTime", "missing"),
+        None => return exception_variant(HlaException::InvalidLogicalTime, "missing"),
     };
 
     let (already_grantable, grant_time) = {
         let mut federates = m.federation.federates.write();
         let fs = match federates.get_mut(&m.federate_handle) {
             Some(f) => f,
-            None => return exception_variant("FederateNotExecutionMember", ""),
+            None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
         };
         if fs.time.pending_advance.is_some() {
-            return exception_variant("InTimeAdvancingState", "");
+            return exception_variant(HlaException::InTimeAdvancingState, "");
         }
         if requested < fs.time.current_time {
-            return exception_variant("LogicalTimeAlreadyPassed", "");
+            return exception_variant(HlaException::LogicalTimeAlreadyPassed, "");
         }
         fs.time.pending_advance = Some(requested);
         (!fs.time.is_constrained, requested)
@@ -4651,12 +4692,12 @@ fn try_grant_pending_advances_with_tso(
 fn query_logical_time(ctx: &SessionContext) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let federates = m.federation.federates.read();
     let fs = match federates.get(&m.federate_handle) {
         Some(f) => f,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     Resp::QueryLogicalTimeResponse(QueryLogicalTimeResponse {
         result: Some(encode_logical_time(fs.time.current_time)),
@@ -4670,22 +4711,22 @@ fn modify_lookahead(
     use hla_fedpro_proto::fedpro::ModifyLookaheadResponse;
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let lookahead = match lookahead.as_ref().map(decode_logical_time_interval) {
         Some(Ok(v)) if v.is_finite() && v >= 0.0 => v,
-        _ => return exception_variant("InvalidLookahead", ""),
+        _ => return exception_variant(HlaException::InvalidLookahead, ""),
     };
     let mut federates = m.federation.federates.write();
     match federates.get_mut(&m.federate_handle) {
         Some(fs) => {
             if !fs.time.is_regulating {
-                return exception_variant("TimeRegulationIsNotEnabled", "");
+                return exception_variant(HlaException::TimeRegulationIsNotEnabled, "");
             }
             fs.time.lookahead = lookahead;
             Resp::ModifyLookaheadResponse(ModifyLookaheadResponse {})
         }
-        None => exception_variant("FederateNotExecutionMember", ""),
+        None => exception_variant(HlaException::FederateNotExecutionMember, ""),
     }
 }
 
@@ -4693,7 +4734,7 @@ fn query_lits(ctx: &SessionContext) -> Resp {
     use hla_fedpro_proto::fedpro::{QueryLitsResponse, TimeQueryReturn};
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let lbts = crate::time::lbts(&m.federation);
     Resp::QueryLitsResponse(QueryLitsResponse {
@@ -4711,15 +4752,15 @@ fn query_lits(ctx: &SessionContext) -> Resp {
 fn query_lookahead(ctx: &SessionContext) -> Resp {
     let m = match ctx.membership.as_ref() {
         Some(m) => m,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     let federates = m.federation.federates.read();
     let fs = match federates.get(&m.federate_handle) {
         Some(f) => f,
-        None => return exception_variant("FederateNotExecutionMember", ""),
+        None => return exception_variant(HlaException::FederateNotExecutionMember, ""),
     };
     if !fs.time.is_regulating {
-        return exception_variant("TimeRegulationIsNotEnabled", "");
+        return exception_variant(HlaException::TimeRegulationIsNotEnabled, "");
     }
     Resp::QueryLookaheadResponse(QueryLookaheadResponse {
         result: Some(encode_logical_time_interval(fs.time.lookahead)),
@@ -4736,15 +4777,17 @@ fn single(fh: FederateHandle) -> std::collections::HashSet<FederateHandle> {
 // helpers
 // -----------------------------------------------------------------------------
 
-fn exception(name: &str, details: &str) -> fedpro::CallResponse {
+use crate::exception::HlaException;
+
+fn exception(kind: HlaException, details: &str) -> fedpro::CallResponse {
     fedpro::CallResponse {
-        call_response: Some(exception_variant(name, details)),
+        call_response: Some(exception_variant(kind, details)),
     }
 }
 
-fn exception_variant(name: &str, details: &str) -> Resp {
+fn exception_variant(kind: HlaException, details: &str) -> Resp {
     Resp::ExceptionData(ExceptionData {
-        exception_name: name.to_string(),
+        exception_name: kind.name().to_string(),
         details: details.to_string(),
     })
 }

@@ -19,17 +19,22 @@ pub use handle::{
 pub use time::{HlaFloat64Interval, HlaFloat64Time, LogicalTime, LogicalTimeInterval};
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[non_exhaustive]
 pub enum OrderType {
     Receive,
     TimestampOrder,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[non_exhaustive]
 pub enum TransportationType {
     Reliable,
     BestEffort,
 }
 
+/// Resign actions per IEEE 1516.1-2025 §4.10 — the variant set is fixed by
+/// the standard, so this enum is intentionally exhaustive. Adding a variant
+/// would be a non-trivial protocol change.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum ResignAction {
     UnconditionallyDivestAttributes,
