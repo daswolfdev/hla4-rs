@@ -26,6 +26,7 @@ pub const RTI_MISSING_TIMEOUT: Duration = Duration::from_secs(180);
 pub const RECONNECT_WINDOW: Duration = Duration::from_secs(600);
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum SessionError {
     #[error(transparent)]
     Codec(#[from] CodecError),
@@ -40,6 +41,10 @@ pub enum SessionError {
         got: MessageType,
         expected: MessageType,
     },
+    #[error(
+        "HLA_CALL_RESPONSE sequence mismatch: expected response to request {expected}, got response to {got}"
+    )]
+    ResponseMismatch { expected: i32, got: i32 },
     #[error("RTI rejected session: {0:?}")]
     SessionRejected(NewSessionStatusReason),
     #[error("unsupported federate protocol version: {0}")]

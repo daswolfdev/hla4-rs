@@ -73,10 +73,13 @@ where
     let payload = HlaCallResponsePayload::decode(&response.payload)
         .map_err(|e| SessionError::Codec(CodecError::Frame(e)))?;
     if payload.response_to_sequence_number != request_seq {
-        return Err(SessionError::Codec(CodecError::Frame(
-            crate::framing::FrameError::UnknownMessageType(0),
-        )));
-        // Note: real impl will queue out-of-order responses by seq# in a map.
+        // MVP semantics: serialize one request at a time, so an
+        // out-of-order response is a protocol error. A real federate
+        // runtime would queue responses keyed on sequence number.
+        return Err(SessionError::ResponseMismatch {
+            expected: request_seq,
+            got: payload.response_to_sequence_number,
+        });
     }
     Ok(payload.body)
 }

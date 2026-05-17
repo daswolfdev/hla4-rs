@@ -10,7 +10,6 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
 
 use hla_fedpro_proto::fedpro;
 use hla_omt::{FomModule, MergedFom};
@@ -79,7 +78,6 @@ async fn boot_with_sushi() -> (SocketAddr, Arc<RtiNode>) {
     tokio::spawn(async move {
         let _ = serve_node.serve(listener).await;
     });
-    tokio::time::sleep(Duration::from_millis(20)).await;
     (addr, node)
 }
 

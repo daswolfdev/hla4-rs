@@ -27,7 +27,6 @@ async fn boot(hb: HeartbeatConfig) -> (SocketAddr, Arc<RtiNode>) {
     tokio::spawn(async move {
         let _ = serve_node.serve(listener).await;
     });
-    tokio::time::sleep(Duration::from_millis(20)).await;
     (addr, node)
 }
 

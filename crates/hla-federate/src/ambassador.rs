@@ -153,8 +153,9 @@ impl RtiAmbassador {
     {
         let ack = client_open_session(&mut stream).await?;
         let (read_half, write_half) = tokio::io::split(stream);
-        let source: Box<dyn FrameSource + Send + 'static> = Box::new(AsyncReadSource(read_half));
-        let sink: Box<dyn FrameSink + Send + 'static> = Box::new(AsyncWriteSink(write_half));
+        let source: Box<dyn FrameSource + Send + 'static> =
+            Box::new(AsyncReadSource::new(read_half));
+        let sink: Box<dyn FrameSink + Send + 'static> = Box::new(AsyncWriteSink::new(write_half));
         Self::spin_up_with_transport(source, sink, ack.session_id, callbacks).await
     }
 
