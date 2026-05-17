@@ -16,7 +16,7 @@ struct Args {
     bind: String,
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
@@ -25,6 +25,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let addr: SocketAddr = args.bind.parse()?;
     let node = Arc::new(RtiNode::new(addr));
+
+    // Wire Ctrl-C / SIGTERM to the node's cooperative shutdown token.
+    // Once cancelled, every accept loop, per-connection task, and the
+    // suspended-session janitor unwinds.
+    let shutdown_node = Arc::clone(&node);
+    tokio::spawn(async move {
+        if let Err(e) = tokio::signal::ctrl_c().await {
+            tracing::warn!(error = %e, "ctrl_c handler failed; shutdown will not be triggered");
+            return;
+        }
+        tracing::info!("ctrl-c received — beginning graceful shutdown");
+        shutdown_node.shutdown();
+    });
+
+    // `serve` returns Ok(()) once the shutdown token is cancelled.
     node.run().await?;
+    tracing::info!("rtiexec exited cleanly");
     Ok(())
 }
