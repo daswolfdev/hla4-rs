@@ -36,10 +36,10 @@ async fn max_total_caps_concurrent_connections() {
     }
     // Wait for both to be registered.
     let deadline = tokio::time::Instant::now() + Duration::from_millis(500);
-    while node.connections.len() < 2 && tokio::time::Instant::now() < deadline {
+    while node.connection_count() < 2 && tokio::time::Instant::now() < deadline {
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
-    assert_eq!(node.connections.len(), 2);
+    assert_eq!(node.connection_count(), 2);
 
     // Third connect: accept may succeed at TCP level, but the server should
     // immediately close it, so the client's handshake read will fail.
@@ -54,7 +54,7 @@ async fn max_total_caps_concurrent_connections() {
     }
 
     // Confirm we never went above 2.
-    assert!(node.connections.len() <= 2);
+    assert!(node.connection_count() <= 2);
 
     drop(socks);
 }
@@ -70,10 +70,10 @@ async fn max_per_ip_caps_connections_from_one_host() {
     let mut first = TcpStream::connect(addr).await.unwrap();
     client_open_session(&mut first).await.unwrap();
     let deadline = tokio::time::Instant::now() + Duration::from_millis(500);
-    while node.connections.is_empty() && tokio::time::Instant::now() < deadline {
+    while node.connection_count() == 0 && tokio::time::Instant::now() < deadline {
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
-    assert_eq!(node.connections.len(), 1);
+    assert_eq!(node.connection_count(), 1);
 
     // Second connection from same IP: rejected pre-handshake.
     if let Ok(mut s) = TcpStream::connect(addr).await {
@@ -85,5 +85,5 @@ async fn max_per_ip_caps_connections_from_one_host() {
         );
     }
 
-    assert_eq!(node.connections.len(), 1);
+    assert_eq!(node.connection_count(), 1);
 }

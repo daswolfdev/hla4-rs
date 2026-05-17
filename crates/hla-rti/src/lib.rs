@@ -50,13 +50,14 @@ pub use metrics::{MetricsSnapshot, ServerMetrics};
 
 /// Per-connection writer handle. Owned via `Arc` so dispatch handlers (which
 /// fire callbacks at *other* federates' connections) can clone the handle
-/// out of [`RtiNode::connections`] and push frames without holding the lock.
-pub struct ConnectionHandle {
-    pub session_id: u64,
-    pub frame_tx: mpsc::Sender<Frame>,
+/// from `RtiNode`'s internal connection map and push frames without
+/// holding the lock.
+pub(crate) struct ConnectionHandle {
+    pub(crate) session_id: u64,
+    pub(crate) frame_tx: mpsc::Sender<Frame>,
     /// Monotonic sequence number for `HLA_CALLBACK_REQUEST` frames the RTI
     /// emits to this federate. Independent of the client's outbound seq.
-    pub next_outbound_seq: AtomicI32,
+    pub(crate) next_outbound_seq: AtomicI32,
 }
 
 /// Connection limits for DoS mitigation.
@@ -75,12 +76,9 @@ pub struct ConnectionLimits {
 /// federate's transport dropped, eligible to be resumed via
 /// `CTRL_RESUME_REQUEST` before `deadline`. When the deadline passes the
 /// janitor performs cleanup (auto-resign on any joined federation).
-// PR 4 (audit M2) will hide `SuspendedSession` and the field on `RtiNode`
-// that holds it. Until then, both must stay `pub` because integration tests
-// reach into `node.federations` / `node.connections` / etc. directly.
-pub struct SuspendedSession {
-    pub membership: Option<session::Membership>,
-    pub deadline: Instant,
+pub(crate) struct SuspendedSession {
+    pub(crate) membership: Option<session::Membership>,
+    pub(crate) deadline: Instant,
 }
 
 /// Configuration for liveness detection.
@@ -435,6 +433,7 @@ pub struct SyncPoint {
     pub failed_to_sync: HashSet<FederateHandle>,
 }
 
+#[doc(hidden)] // exposed only via RtiNode::_testing_federation
 pub struct Federation {
     pub name: String,
     pub fom: Arc<MergedFom>,
@@ -496,40 +495,40 @@ impl Federation {
 /// janitor unwind cooperatively. See [`Self::shutdown`].
 pub struct RtiNode {
     pub bind_addr: SocketAddr,
-    pub federations: RwLock<HashMap<String, Arc<Federation>>>,
+    pub(crate) federations: RwLock<HashMap<String, Arc<Federation>>>,
     /// Monotonic session ID allocator. Starts at 1 so 0 stays reserved as
     /// `NO_SESSION_ID` per the FedPro protocol.
-    pub next_session_id: AtomicU64,
+    pub(crate) next_session_id: AtomicU64,
     /// Template FOM cloned into each new `Federation` on
     /// `CreateFederationExecution`. Until `CreateFederationExecutionWithModules`
     /// is fully wired, this is the only path for the RTI to know about a FOM.
     /// Wrapped in `RwLock<Arc<_>>` so callers can swap it after binding without
     /// rebuilding the whole node.
-    pub default_fom: RwLock<Arc<MergedFom>>,
+    pub(crate) default_fom: RwLock<Arc<MergedFom>>,
     /// Live connections, keyed by session id. Inserted in `handle_connection`
     /// just after the handshake and removed on disconnect. Dispatch handlers
     /// clone the inner `Arc<ConnectionHandle>` to push `HLA_CALLBACK_REQUEST`
     /// frames at subscriber federates.
-    pub connections: DashMap<u64, Arc<ConnectionHandle>>,
+    pub(crate) connections: DashMap<u64, Arc<ConnectionHandle>>,
     /// Heartbeat / liveness-timeout configuration. Behind an RwLock so tests
     /// (and operators) can adjust without rebuilding the node.
-    pub heartbeat: RwLock<HeartbeatConfig>,
+    pub(crate) heartbeat: RwLock<HeartbeatConfig>,
     /// DoS-protection connection limits.
-    pub limits: RwLock<ConnectionLimits>,
+    pub(crate) limits: RwLock<ConnectionLimits>,
     /// Live connection count per remote IP, for `limits.max_per_ip`.
-    pub connections_per_ip: DashMap<std::net::IpAddr, usize>,
+    pub(crate) connections_per_ip: DashMap<std::net::IpAddr, usize>,
     /// Server-wide metrics for ops / observability.
-    pub metrics: ServerMetrics,
+    pub(crate) metrics: ServerMetrics,
     /// Directory where federation save snapshots are persisted.
-    pub save_dir: RwLock<std::path::PathBuf>,
+    pub(crate) save_dir: RwLock<std::path::PathBuf>,
     /// Sessions whose transport has dropped but which are still eligible
     /// to be resumed within `heartbeat.reconnect_window`.
-    pub suspended_sessions: DashMap<u64, SuspendedSession>,
+    pub(crate) suspended_sessions: DashMap<u64, SuspendedSession>,
     /// Cooperative shutdown signal. Every accept loop, per-connection
     /// reader, writer task, heartbeat task, and the suspended-session
     /// janitor watch this token; cancelling it drives a graceful
     /// drain across the node. Call [`Self::shutdown`] to trigger.
-    shutdown: tokio_util::sync::CancellationToken,
+    pub(crate) shutdown: tokio_util::sync::CancellationToken,
 }
 
 impl RtiNode {
@@ -548,6 +547,47 @@ impl RtiNode {
             save_dir: RwLock::new(std::path::PathBuf::from("./hla4-saves")),
             shutdown: tokio_util::sync::CancellationToken::new(),
         }
+    }
+
+    /// Number of currently live federate connections.
+    pub fn connection_count(&self) -> usize {
+        self.connections.len()
+    }
+
+    /// `true` if a session with `session_id` is currently connected.
+    pub fn has_connection(&self, session_id: u64) -> bool {
+        self.connections.contains_key(&session_id)
+    }
+
+    /// Number of currently suspended sessions awaiting resume.
+    pub fn suspended_session_count(&self) -> usize {
+        self.suspended_sessions.len()
+    }
+
+    /// `true` if `session_id` is currently in the suspended-session
+    /// table (dropped transport, within the reconnect window).
+    pub fn has_suspended_session(&self, session_id: u64) -> bool {
+        self.suspended_sessions.contains_key(&session_id)
+    }
+
+    /// Snapshot of federation names currently registered.
+    pub fn federation_names(&self) -> Vec<String> {
+        self.federations.read().keys().cloned().collect()
+    }
+
+    /// Inspect a federation's internal state by name.
+    ///
+    /// **Test-only.** Returns the live `Arc<Federation>`; callers can
+    /// hold locks on its inner state, which is fine for assertions in
+    /// integration tests but a deadlock vector from application code.
+    /// `Federation` itself is `#[doc(hidden)]` for the same reason —
+    /// it is not part of the stable surface. Tightening
+    /// `Federation`'s own inner fields to `pub(crate)` is tracked as
+    /// the second half of audit M2 and intentionally deferred to a
+    /// follow-up PR.
+    #[doc(hidden)]
+    pub fn _testing_federation(&self, name: &str) -> Option<Arc<Federation>> {
+        self.federations.read().get(name).cloned()
     }
 
     /// Trigger a graceful shutdown.

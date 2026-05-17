@@ -21,10 +21,10 @@ pub(crate) struct SessionContext {
 }
 
 #[derive(Clone)]
-pub struct Membership {
-    pub federation: Arc<Federation>,
-    pub federate_handle: FederateHandle,
-    pub federate_name: String,
+pub(crate) struct Membership {
+    pub(crate) federation: Arc<Federation>,
+    pub(crate) federate_handle: FederateHandle,
+    pub(crate) federate_name: String,
 }
 
 impl SessionContext {

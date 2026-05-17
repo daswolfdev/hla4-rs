@@ -100,8 +100,7 @@ async fn resume_after_drop_within_window_preserves_membership() {
 
     // Federation should have one federate.
     {
-        let feds = node.federations.read();
-        let f = feds.get("resume-fed").unwrap();
+        let f = node._testing_federation("resume-fed").unwrap();
         assert_eq!(f.federates.read().len(), 1);
     }
 
@@ -111,10 +110,9 @@ async fn resume_after_drop_within_window_preserves_membership() {
 
     // Federation membership preserved in suspended_sessions; federates map
     // still has the entry (only janitor expiry removes it).
-    assert!(node.suspended_sessions.get(&session_id).is_some());
+    assert!(node.has_suspended_session(session_id));
     {
-        let feds = node.federations.read();
-        let f = feds.get("resume-fed").unwrap();
+        let f = node._testing_federation("resume-fed").unwrap();
         assert_eq!(
             f.federates.read().len(),
             1,
@@ -133,10 +131,9 @@ async fn resume_after_drop_within_window_preserves_membership() {
     assert_eq!(response.header.session_id, session_id);
 
     // Suspended slot drained; federation membership still intact.
-    assert!(node.suspended_sessions.get(&session_id).is_none());
+    assert!(!node.has_suspended_session(session_id));
     {
-        let feds = node.federations.read();
-        let f = feds.get("resume-fed").unwrap();
+        let f = node._testing_federation("resume-fed").unwrap();
         assert_eq!(f.federates.read().len(), 1);
     }
 
@@ -200,7 +197,7 @@ async fn resume_after_expiry_returns_failure() {
     drop(sock1);
     // Wait past reconnect_window so the janitor expires the session.
     tokio::time::sleep(Duration::from_millis(400)).await;
-    assert!(node.suspended_sessions.get(&session_id).is_none());
+    assert!(!node.has_suspended_session(session_id));
 
     // Try to resume — should fail.
     let mut sock2 = TcpStream::connect(addr).await.unwrap();
@@ -275,5 +272,5 @@ async fn zero_window_skips_suspension_for_compat() {
         decode(&resp),
         fedpro::call_response::CallResponse::DestroyFederationExecutionResponse(_)
     ));
-    assert!(node.suspended_sessions.is_empty());
+    assert!(node.suspended_session_count() == 0);
 }

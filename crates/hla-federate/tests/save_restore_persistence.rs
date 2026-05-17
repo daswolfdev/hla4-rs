@@ -139,8 +139,7 @@ async fn save_writes_snapshot_to_disk_then_restore_reads_it() {
 
     // Verify in-memory state survives. Now blow it away to simulate restart.
     {
-        let feds = node.federations.read();
-        let f = feds.get("sr-fed").unwrap();
+        let f = node._testing_federation("sr-fed").unwrap();
         f.object_instances.write().clear();
         assert!(f.object_instances.read().is_empty());
     }
@@ -161,8 +160,7 @@ async fn save_writes_snapshot_to_disk_then_restore_reads_it() {
 
     // The restored instance should be back in the registry.
     {
-        let feds = node.federations.read();
-        let f = feds.get("sr-fed").unwrap();
+        let f = node._testing_federation("sr-fed").unwrap();
         let inst = f.object_instances.read();
         assert_eq!(inst.len(), 1, "instance should be restored");
         assert_eq!(inst.values().next().unwrap().handle, instance);
