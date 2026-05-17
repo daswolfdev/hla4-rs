@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "crates/hla-core",
     "crates/hla-encoding",
@@ -58,3 +58,20 @@ opt-level = 0
 opt-level = 3
 lto = "thin"
 codegen-units = 1
+
+# Workspace-wide lint baseline. Every crate opts in via `[lints] workspace = true`.
+# Conservative starting point: clippy::all + targeted denies for real bugs.
+# pedantic / nursery groups are deferred to a follow-up PR once the workspace
+# is clean against `all`.
+[workspace.lints.rust]
+unsafe_code     = "forbid"
+unused_must_use = "deny"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+all                = { level = "warn", priority = -1 }
+await_holding_lock = "deny"
+dbg_macro          = "deny"
+mem_forget         = "deny"
+todo               = "warn"
+unimplemented      = "deny"

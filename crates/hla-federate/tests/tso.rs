@@ -102,23 +102,34 @@ async fn tso_messages_held_until_constrained_federate_advances() {
 
     // Subscriber B is constrained, current_time = 0.
     let rec_b = Arc::new(TsoRec::default());
-    let b = RtiAmbassador::connect(&url, Arc::clone(&rec_b)).await.unwrap();
+    let b = RtiAmbassador::connect(&url, Arc::clone(&rec_b))
+        .await
+        .unwrap();
     b.create_federation_execution("tso").await.ok();
     b.join_federation_execution("B", "tso").await.unwrap();
-    let class = b.get_object_class_handle("HLAobjectRoot.Ping").await.unwrap();
+    let class = b
+        .get_object_class_handle("HLAobjectRoot.Ping")
+        .await
+        .unwrap();
     let attr = b.get_attribute_handle(class, "Seq").await.unwrap();
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(attr);
-    b.subscribe_object_class_attributes(class, attrs.clone()).await.unwrap();
+    b.subscribe_object_class_attributes(class, attrs.clone())
+        .await
+        .unwrap();
     b.enable_time_constrained().await.unwrap();
     // Wait for TimeConstrainedEnabled callback to land.
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Publisher A is regulating with lookahead=1.0.
     let rec_a = Arc::new(TsoRec::default());
-    let a = RtiAmbassador::connect(&url, Arc::clone(&rec_a)).await.unwrap();
+    let a = RtiAmbassador::connect(&url, Arc::clone(&rec_a))
+        .await
+        .unwrap();
     a.join_federation_execution("A", "tso").await.unwrap();
-    a.publish_object_class_attributes(class, attrs).await.unwrap();
+    a.publish_object_class_attributes(class, attrs)
+        .await
+        .unwrap();
     a.enable_time_regulation(1.0).await.unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -148,10 +159,12 @@ async fn tso_messages_held_until_constrained_federate_advances() {
     b.time_advance_request(2.0).await.unwrap();
 
     // B should receive the queued reflect THEN the grant.
-    assert!(wait_for(Duration::from_secs(1), || {
-        !rec_b.timed_reflects.lock().is_empty() && !rec_b.grants.lock().is_empty()
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            !rec_b.timed_reflects.lock().is_empty() && !rec_b.grants.lock().is_empty()
+        })
+        .await
+    );
     let reflects = rec_b.timed_reflects.lock();
     assert_eq!(reflects.len(), 1);
     assert_eq!(reflects[0], 2.0);
@@ -165,19 +178,30 @@ async fn tso_unconstrained_federate_gets_immediate_delivery() {
 
     // Subscriber is unconstrained.
     let rec_b = Arc::new(TsoRec::default());
-    let b = RtiAmbassador::connect(&url, Arc::clone(&rec_b)).await.unwrap();
+    let b = RtiAmbassador::connect(&url, Arc::clone(&rec_b))
+        .await
+        .unwrap();
     b.create_federation_execution("tso2").await.ok();
     b.join_federation_execution("B", "tso2").await.unwrap();
-    let class = b.get_object_class_handle("HLAobjectRoot.Ping").await.unwrap();
+    let class = b
+        .get_object_class_handle("HLAobjectRoot.Ping")
+        .await
+        .unwrap();
     let attr = b.get_attribute_handle(class, "Seq").await.unwrap();
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(attr);
-    b.subscribe_object_class_attributes(class, attrs.clone()).await.unwrap();
+    b.subscribe_object_class_attributes(class, attrs.clone())
+        .await
+        .unwrap();
 
     let rec_a = Arc::new(TsoRec::default());
-    let a = RtiAmbassador::connect(&url, Arc::clone(&rec_a)).await.unwrap();
+    let a = RtiAmbassador::connect(&url, Arc::clone(&rec_a))
+        .await
+        .unwrap();
     a.join_federation_execution("A", "tso2").await.unwrap();
-    a.publish_object_class_attributes(class, attrs).await.unwrap();
+    a.publish_object_class_attributes(class, attrs)
+        .await
+        .unwrap();
     a.enable_time_regulation(1.0).await.unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -185,10 +209,12 @@ async fn tso_unconstrained_federate_gets_immediate_delivery() {
     a.call_with_time_update(instance, attr, 99, 5.0).await;
 
     // B is unconstrained — receives immediately.
-    assert!(wait_for(Duration::from_secs(1), || {
-        !rec_b.timed_reflects.lock().is_empty()
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            !rec_b.timed_reflects.lock().is_empty()
+        })
+        .await
+    );
 }
 
 // Helper trait for sending WithTime updates (the federate library doesn't
@@ -215,25 +241,27 @@ impl TsoExt for RtiAmbassador {
         // library doesn't yet expose a typed update_attribute_values_with_time.
         use hla_fedpro_proto::fedpro;
         let _ = self
-            .raw_call_for_test(fedpro::call_request::CallRequest::UpdateAttributeValuesWithTimeRequest(
-                fedpro::UpdateAttributeValuesWithTimeRequest {
-                    object_instance: Some(fedpro::ObjectInstanceHandle {
-                        data: instance.raw().to_be_bytes().to_vec(),
-                    }),
-                    attribute_values: Some(fedpro::AttributeHandleValueMap {
-                        attribute_handle_value: vec![fedpro::AttributeHandleValue {
-                            attribute_handle: Some(fedpro::AttributeHandle {
-                                data: attr.raw().to_be_bytes().to_vec(),
-                            }),
-                            value: value.to_be_bytes().to_vec(),
-                        }],
-                    }),
-                    user_supplied_tag: b"tso".to_vec(),
-                    time: Some(fedpro::LogicalTime {
-                        data: time.to_be_bytes().to_vec(),
-                    }),
-                },
-            ))
+            .raw_call_for_test(
+                fedpro::call_request::CallRequest::UpdateAttributeValuesWithTimeRequest(
+                    fedpro::UpdateAttributeValuesWithTimeRequest {
+                        object_instance: Some(fedpro::ObjectInstanceHandle {
+                            data: instance.raw().to_be_bytes().to_vec(),
+                        }),
+                        attribute_values: Some(fedpro::AttributeHandleValueMap {
+                            attribute_handle_value: vec![fedpro::AttributeHandleValue {
+                                attribute_handle: Some(fedpro::AttributeHandle {
+                                    data: attr.raw().to_be_bytes().to_vec(),
+                                }),
+                                value: value.to_be_bytes().to_vec(),
+                            }],
+                        }),
+                        user_supplied_tag: b"tso".to_vec(),
+                        time: Some(fedpro::LogicalTime {
+                            data: time.to_be_bytes().to_vec(),
+                        }),
+                    },
+                ),
+            )
             .await;
         // suppress unused-warn
         let _ = HashSet::<FederateHandle>::new();

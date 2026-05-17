@@ -32,10 +32,9 @@ use tokio::task::JoinHandle;
 
 use crate::callbacks::FederateAmbassador;
 use crate::handles::{
-    decode_attribute_value_map, decode_federate, decode_interaction_class,
-    decode_object_class, decode_object_instance, decode_parameter_value_map,
-    encode_attribute, encode_interaction_class, encode_object_class, encode_object_instance,
-    encode_parameter,
+    decode_attribute_value_map, decode_federate, decode_interaction_class, decode_object_class,
+    decode_object_instance, decode_parameter_value_map, encode_attribute, encode_interaction_class,
+    encode_object_class, encode_object_instance, encode_parameter,
 };
 
 #[derive(Debug, Error)]
@@ -144,17 +143,18 @@ impl RtiAmbassador {
     /// Generic core: takes any already-connected `AsyncRead + AsyncWrite`
     /// stream, performs the FedPro handshake via byte stream, and spins up
     /// the pump + writer tasks.
-    pub async fn connect_with_stream<S, A>(mut stream: S, callbacks: A) -> Result<Self, ConnectError>
+    pub async fn connect_with_stream<S, A>(
+        mut stream: S,
+        callbacks: A,
+    ) -> Result<Self, ConnectError>
     where
         S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
         A: FederateAmbassador,
     {
         let ack = client_open_session(&mut stream).await?;
         let (read_half, write_half) = tokio::io::split(stream);
-        let source: Box<dyn FrameSource + Send + 'static> =
-            Box::new(AsyncReadSource(read_half));
-        let sink: Box<dyn FrameSink + Send + 'static> =
-            Box::new(AsyncWriteSink(write_half));
+        let source: Box<dyn FrameSource + Send + 'static> = Box::new(AsyncReadSource(read_half));
+        let sink: Box<dyn FrameSink + Send + 'static> = Box::new(AsyncWriteSink(write_half));
         Self::spin_up_with_transport(source, sink, ack.session_id, callbacks).await
     }
 
@@ -279,8 +279,7 @@ impl RtiAmbassador {
         let (tx, rx) = oneshot::channel();
         self.inner.pending.insert(seq, tx);
 
-        let frame =
-            hla_wire::hla_call_request_frame(seq, self.inner.session_id, 0, body);
+        let frame = hla_wire::hla_call_request_frame(seq, self.inner.session_id, 0, body);
         self.inner
             .frame_tx
             .send(frame)
@@ -397,7 +396,9 @@ impl RtiAmbassador {
     /// For our impl this is a no-op — the FedPro session opening *is* the
     /// connect — but we expose it for spec completeness.
     pub async fn connect_federation(&self) -> Result<(), CallError> {
-        let r = self.call(Req::ConnectRequest(fedpro::ConnectRequest {})).await?;
+        let r = self
+            .call(Req::ConnectRequest(fedpro::ConnectRequest {}))
+            .await?;
         match Self::check_exception(r)? {
             Resp::ConnectResponse(_) => Ok(()),
             _ => Err(CallError::UnexpectedResponse),
@@ -405,7 +406,9 @@ impl RtiAmbassador {
     }
 
     pub async fn disconnect_federation(&self) -> Result<(), CallError> {
-        let r = self.call(Req::DisconnectRequest(fedpro::DisconnectRequest {})).await?;
+        let r = self
+            .call(Req::DisconnectRequest(fedpro::DisconnectRequest {}))
+            .await?;
         match Self::check_exception(r)? {
             Resp::DisconnectResponse(_) => Ok(()),
             _ => Err(CallError::UnexpectedResponse),
@@ -415,7 +418,9 @@ impl RtiAmbassador {
     pub async fn get_federate_handle(&self, name: &str) -> Result<FederateHandle, CallError> {
         let r = self
             .call(Req::GetFederateHandleRequest(
-                fedpro::GetFederateHandleRequest { federate_name: name.into() },
+                fedpro::GetFederateHandleRequest {
+                    federate_name: name.into(),
+                },
             ))
             .await?;
         match Self::check_exception(r)? {
@@ -514,10 +519,7 @@ impl RtiAmbassador {
         }
     }
 
-    pub async fn resign_federation_execution(
-        &self,
-        action: ResignAction,
-    ) -> Result<(), CallError> {
+    pub async fn resign_federation_execution(&self, action: ResignAction) -> Result<(), CallError> {
         let r = self
             .call(Req::ResignFederationExecutionRequest(
                 fedpro::ResignFederationExecutionRequest {
@@ -573,7 +575,7 @@ impl RtiAmbassador {
             Resp::GetAttributeHandleResponse(g) => g
                 .result
                 .as_ref()
-                .and_then(|h| crate::handles::decode_attribute(h))
+                .and_then(crate::handles::decode_attribute)
                 .ok_or(CallError::UnexpectedResponse),
             _ => Err(CallError::UnexpectedResponse),
         }
@@ -824,11 +826,13 @@ impl RtiAmbassador {
         tag: &[u8],
     ) -> Result<(), CallError> {
         let r = self
-            .call(Req::SendInteractionRequest(fedpro::SendInteractionRequest {
-                interaction_class: Some(encode_interaction_class(class)),
-                parameter_values: Some(encode_param_value_map(&params)),
-                user_supplied_tag: tag.to_vec(),
-            }))
+            .call(Req::SendInteractionRequest(
+                fedpro::SendInteractionRequest {
+                    interaction_class: Some(encode_interaction_class(class)),
+                    parameter_values: Some(encode_param_value_map(&params)),
+                    user_supplied_tag: tag.to_vec(),
+                },
+            ))
             .await?;
         match Self::check_exception(r)? {
             Resp::SendInteractionResponse(_) => Ok(()),
@@ -1099,7 +1103,9 @@ impl RtiAmbassador {
     pub async fn request_federation_save(&self, label: &str) -> Result<(), CallError> {
         let r = self
             .call(Req::RequestFederationSaveRequest(
-                fedpro::RequestFederationSaveRequest { label: label.into() },
+                fedpro::RequestFederationSaveRequest {
+                    label: label.into(),
+                },
             ))
             .await?;
         match Self::check_exception(r)? {
@@ -1135,7 +1141,9 @@ impl RtiAmbassador {
     pub async fn request_federation_restore(&self, label: &str) -> Result<(), CallError> {
         let r = self
             .call(Req::RequestFederationRestoreRequest(
-                fedpro::RequestFederationRestoreRequest { label: label.into() },
+                fedpro::RequestFederationRestoreRequest {
+                    label: label.into(),
+                },
             ))
             .await?;
         match Self::check_exception(r)? {
@@ -1348,7 +1356,10 @@ async fn dispatch_callback<A: FederateAmbassador>(
                 .await;
         }
         CB::ReceiveInteraction(i) => {
-            let Some(class) = i.interaction_class.as_ref().and_then(decode_interaction_class)
+            let Some(class) = i
+                .interaction_class
+                .as_ref()
+                .and_then(decode_interaction_class)
             else {
                 return;
             };
@@ -1405,18 +1416,12 @@ async fn dispatch_callback<A: FederateAmbassador>(
         }
         CB::SynchronizationPointRegistrationFailed(f) => {
             callbacks
-                .synchronization_point_registration_failed(
-                    f.synchronization_point_label,
-                    f.reason,
-                )
+                .synchronization_point_registration_failed(f.synchronization_point_label, f.reason)
                 .await;
         }
         CB::AnnounceSynchronizationPoint(a) => {
             callbacks
-                .announce_synchronization_point(
-                    a.synchronization_point_label,
-                    a.user_supplied_tag,
-                )
+                .announce_synchronization_point(a.synchronization_point_label, a.user_supplied_tag)
                 .await;
         }
         CB::ReportFederationExecutionMembers(r) => {
@@ -1451,7 +1456,9 @@ async fn dispatch_callback<A: FederateAmbassador>(
             callbacks.report_federation_executions(names).await;
         }
         CB::RequestFederationRestoreSucceeded(s) => {
-            callbacks.request_federation_restore_succeeded(s.label).await;
+            callbacks
+                .request_federation_restore_succeeded(s.label)
+                .await;
         }
         CB::RequestFederationRestoreFailed(f) => {
             callbacks.request_federation_restore_failed(f.label).await;
@@ -1501,7 +1508,9 @@ async fn dispatch_callback<A: FederateAmbassador>(
             let Some(owner) = i.federate.as_ref().and_then(decode_federate) else {
                 return;
             };
-            callbacks.inform_attribute_ownership(instance, attrs, owner).await;
+            callbacks
+                .inform_attribute_ownership(instance, attrs, owner)
+                .await;
         }
         CB::AttributeOwnershipAcquisitionNotification(n) => {
             let Some(instance) = n.object_instance.as_ref().and_then(decode_object_instance) else {
@@ -1574,47 +1583,99 @@ async fn dispatch_callback<A: FederateAmbassador>(
             let Some(instance) = r.object_instance.as_ref().and_then(decode_object_instance) else {
                 return;
             };
-            let values = r.attribute_values.as_ref().map(decode_attribute_value_map).unwrap_or_default();
+            let values = r
+                .attribute_values
+                .as_ref()
+                .map(decode_attribute_value_map)
+                .unwrap_or_default();
             let producer = r.producing_federate.as_ref().and_then(decode_federate);
-            let time = r.time.as_ref().and_then(|lt| {
-                if lt.data.len() == 8 {
-                    Some(f64::from_be_bytes(lt.data[..].try_into().unwrap()))
-                } else {
-                    None
-                }
-            }).unwrap_or(0.0);
+            let time = r
+                .time
+                .as_ref()
+                .and_then(|lt| {
+                    if lt.data.len() == 8 {
+                        Some(f64::from_be_bytes(lt.data[..].try_into().unwrap()))
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0.0);
             callbacks
-                .reflect_attribute_values_with_time(instance, values, r.user_supplied_tag, producer, time)
+                .reflect_attribute_values_with_time(
+                    instance,
+                    values,
+                    r.user_supplied_tag,
+                    producer,
+                    time,
+                )
                 .await;
         }
         CB::ReceiveInteractionWithTime(i) => {
-            let Some(class) = i.interaction_class.as_ref().and_then(decode_interaction_class) else { return };
-            let params = i.parameter_values.as_ref().map(decode_parameter_value_map).unwrap_or_default();
+            let Some(class) = i
+                .interaction_class
+                .as_ref()
+                .and_then(decode_interaction_class)
+            else {
+                return;
+            };
+            let params = i
+                .parameter_values
+                .as_ref()
+                .map(decode_parameter_value_map)
+                .unwrap_or_default();
             let producer = i.producing_federate.as_ref().and_then(decode_federate);
-            let time = i.time.as_ref().and_then(|lt| {
-                if lt.data.len() == 8 { Some(f64::from_be_bytes(lt.data[..].try_into().unwrap())) } else { None }
-            }).unwrap_or(0.0);
-            callbacks.receive_interaction_with_time(class, params, i.user_supplied_tag, producer, time).await;
+            let time = i
+                .time
+                .as_ref()
+                .and_then(|lt| {
+                    if lt.data.len() == 8 {
+                        Some(f64::from_be_bytes(lt.data[..].try_into().unwrap()))
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0.0);
+            callbacks
+                .receive_interaction_with_time(class, params, i.user_supplied_tag, producer, time)
+                .await;
         }
         CB::RemoveObjectInstanceWithTime(r) => {
-            let Some(instance) = r.object_instance.as_ref().and_then(decode_object_instance) else { return };
+            let Some(instance) = r.object_instance.as_ref().and_then(decode_object_instance) else {
+                return;
+            };
             let producer = r.producing_federate.as_ref().and_then(decode_federate);
-            let time = r.time.as_ref().and_then(|lt| {
-                if lt.data.len() == 8 { Some(f64::from_be_bytes(lt.data[..].try_into().unwrap())) } else { None }
-            }).unwrap_or(0.0);
-            callbacks.remove_object_instance_with_time(instance, r.user_supplied_tag, producer, time).await;
+            let time = r
+                .time
+                .as_ref()
+                .and_then(|lt| {
+                    if lt.data.len() == 8 {
+                        Some(f64::from_be_bytes(lt.data[..].try_into().unwrap()))
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0.0);
+            callbacks
+                .remove_object_instance_with_time(instance, r.user_supplied_tag, producer, time)
+                .await;
         }
         CB::ObjectInstanceNameReservationFailed(f) => {
-            callbacks.object_instance_name_reservation_failed(f.object_instance_name).await;
+            callbacks
+                .object_instance_name_reservation_failed(f.object_instance_name)
+                .await;
         }
         CB::MultipleObjectInstanceNameReservationSucceeded(s) => {
             callbacks
-                .multiple_object_instance_name_reservation_succeeded(s.object_instance_names.into_iter().collect())
+                .multiple_object_instance_name_reservation_succeeded(
+                    s.object_instance_names.into_iter().collect(),
+                )
                 .await;
         }
         CB::MultipleObjectInstanceNameReservationFailed(f) => {
             callbacks
-                .multiple_object_instance_name_reservation_failed(f.object_instance_names.into_iter().collect())
+                .multiple_object_instance_name_reservation_failed(
+                    f.object_instance_names.into_iter().collect(),
+                )
                 .await;
         }
         CB::StartRegistrationForObjectClass(s) => {
@@ -1628,79 +1689,229 @@ async fn dispatch_callback<A: FederateAmbassador>(
             }
         }
         CB::TurnInteractionsOn(t) => {
-            if let Some(class) = t.interaction_class.as_ref().and_then(decode_interaction_class) {
+            if let Some(class) = t
+                .interaction_class
+                .as_ref()
+                .and_then(decode_interaction_class)
+            {
                 callbacks.turn_interactions_on(class).await;
             }
         }
         CB::TurnInteractionsOff(t) => {
-            if let Some(class) = t.interaction_class.as_ref().and_then(decode_interaction_class) {
+            if let Some(class) = t
+                .interaction_class
+                .as_ref()
+                .and_then(decode_interaction_class)
+            {
                 callbacks.turn_interactions_off(class).await;
             }
         }
         CB::TurnUpdatesOnForObjectInstance(t) => {
-            let Some(instance) = t.object_instance.as_ref().and_then(decode_object_instance) else { return };
-            let attrs: Vec<_> = t.attributes.as_ref().map(|s| s.attribute_handle.iter().filter_map(crate::handles::decode_attribute).collect()).unwrap_or_default();
-            callbacks.turn_updates_on_for_object_instance(instance, attrs).await;
+            let Some(instance) = t.object_instance.as_ref().and_then(decode_object_instance) else {
+                return;
+            };
+            let attrs: Vec<_> = t
+                .attributes
+                .as_ref()
+                .map(|s| {
+                    s.attribute_handle
+                        .iter()
+                        .filter_map(crate::handles::decode_attribute)
+                        .collect()
+                })
+                .unwrap_or_default();
+            callbacks
+                .turn_updates_on_for_object_instance(instance, attrs)
+                .await;
         }
         CB::TurnUpdatesOffForObjectInstance(t) => {
-            let Some(instance) = t.object_instance.as_ref().and_then(decode_object_instance) else { return };
-            let attrs: Vec<_> = t.attributes.as_ref().map(|s| s.attribute_handle.iter().filter_map(crate::handles::decode_attribute).collect()).unwrap_or_default();
-            callbacks.turn_updates_off_for_object_instance(instance, attrs).await;
+            let Some(instance) = t.object_instance.as_ref().and_then(decode_object_instance) else {
+                return;
+            };
+            let attrs: Vec<_> = t
+                .attributes
+                .as_ref()
+                .map(|s| {
+                    s.attribute_handle
+                        .iter()
+                        .filter_map(crate::handles::decode_attribute)
+                        .collect()
+                })
+                .unwrap_or_default();
+            callbacks
+                .turn_updates_off_for_object_instance(instance, attrs)
+                .await;
         }
         CB::AttributesInScope(a) => {
-            let Some(instance) = a.object_instance.as_ref().and_then(decode_object_instance) else { return };
-            let attrs: Vec<_> = a.attributes.as_ref().map(|s| s.attribute_handle.iter().filter_map(crate::handles::decode_attribute).collect()).unwrap_or_default();
+            let Some(instance) = a.object_instance.as_ref().and_then(decode_object_instance) else {
+                return;
+            };
+            let attrs: Vec<_> = a
+                .attributes
+                .as_ref()
+                .map(|s| {
+                    s.attribute_handle
+                        .iter()
+                        .filter_map(crate::handles::decode_attribute)
+                        .collect()
+                })
+                .unwrap_or_default();
             callbacks.attributes_in_scope(instance, attrs).await;
         }
         CB::AttributesOutOfScope(a) => {
-            let Some(instance) = a.object_instance.as_ref().and_then(decode_object_instance) else { return };
-            let attrs: Vec<_> = a.attributes.as_ref().map(|s| s.attribute_handle.iter().filter_map(crate::handles::decode_attribute).collect()).unwrap_or_default();
+            let Some(instance) = a.object_instance.as_ref().and_then(decode_object_instance) else {
+                return;
+            };
+            let attrs: Vec<_> = a
+                .attributes
+                .as_ref()
+                .map(|s| {
+                    s.attribute_handle
+                        .iter()
+                        .filter_map(crate::handles::decode_attribute)
+                        .collect()
+                })
+                .unwrap_or_default();
             callbacks.attributes_out_of_scope(instance, attrs).await;
         }
         CB::ProvideAttributeValueUpdate(p) => {
-            let Some(instance) = p.object_instance.as_ref().and_then(decode_object_instance) else { return };
-            let attrs: Vec<_> = p.attributes.as_ref().map(|s| s.attribute_handle.iter().filter_map(crate::handles::decode_attribute).collect()).unwrap_or_default();
-            callbacks.provide_attribute_value_update(instance, attrs, p.user_supplied_tag).await;
+            let Some(instance) = p.object_instance.as_ref().and_then(decode_object_instance) else {
+                return;
+            };
+            let attrs: Vec<_> = p
+                .attributes
+                .as_ref()
+                .map(|s| {
+                    s.attribute_handle
+                        .iter()
+                        .filter_map(crate::handles::decode_attribute)
+                        .collect()
+                })
+                .unwrap_or_default();
+            callbacks
+                .provide_attribute_value_update(instance, attrs, p.user_supplied_tag)
+                .await;
         }
         CB::RequestAttributeOwnershipAssumption(r) => {
-            let Some(instance) = r.object_instance.as_ref().and_then(decode_object_instance) else { return };
-            let attrs: Vec<_> = r.offered_attributes.as_ref().map(|s| s.attribute_handle.iter().filter_map(crate::handles::decode_attribute).collect()).unwrap_or_default();
-            callbacks.request_attribute_ownership_assumption(instance, attrs, r.user_supplied_tag).await;
+            let Some(instance) = r.object_instance.as_ref().and_then(decode_object_instance) else {
+                return;
+            };
+            let attrs: Vec<_> = r
+                .offered_attributes
+                .as_ref()
+                .map(|s| {
+                    s.attribute_handle
+                        .iter()
+                        .filter_map(crate::handles::decode_attribute)
+                        .collect()
+                })
+                .unwrap_or_default();
+            callbacks
+                .request_attribute_ownership_assumption(instance, attrs, r.user_supplied_tag)
+                .await;
         }
         CB::RequestAttributeOwnershipRelease(r) => {
-            let Some(instance) = r.object_instance.as_ref().and_then(decode_object_instance) else { return };
-            let attrs: Vec<_> = r.candidate_attributes.as_ref().map(|s| s.attribute_handle.iter().filter_map(crate::handles::decode_attribute).collect()).unwrap_or_default();
-            callbacks.request_attribute_ownership_release(instance, attrs, r.user_supplied_tag).await;
+            let Some(instance) = r.object_instance.as_ref().and_then(decode_object_instance) else {
+                return;
+            };
+            let attrs: Vec<_> = r
+                .candidate_attributes
+                .as_ref()
+                .map(|s| {
+                    s.attribute_handle
+                        .iter()
+                        .filter_map(crate::handles::decode_attribute)
+                        .collect()
+                })
+                .unwrap_or_default();
+            callbacks
+                .request_attribute_ownership_release(instance, attrs, r.user_supplied_tag)
+                .await;
         }
         CB::RequestDivestitureConfirmation(r) => {
-            let Some(instance) = r.object_instance.as_ref().and_then(decode_object_instance) else { return };
-            let attrs: Vec<_> = r.released_attributes.as_ref().map(|s| s.attribute_handle.iter().filter_map(crate::handles::decode_attribute).collect()).unwrap_or_default();
-            callbacks.request_divestiture_confirmation(instance, attrs, r.user_supplied_tag).await;
+            let Some(instance) = r.object_instance.as_ref().and_then(decode_object_instance) else {
+                return;
+            };
+            let attrs: Vec<_> = r
+                .released_attributes
+                .as_ref()
+                .map(|s| {
+                    s.attribute_handle
+                        .iter()
+                        .filter_map(crate::handles::decode_attribute)
+                        .collect()
+                })
+                .unwrap_or_default();
+            callbacks
+                .request_divestiture_confirmation(instance, attrs, r.user_supplied_tag)
+                .await;
         }
         CB::AttributeIsOwnedByRti(a) => {
-            let Some(instance) = a.object_instance.as_ref().and_then(decode_object_instance) else { return };
-            let attrs: Vec<_> = a.attributes.as_ref().map(|s| s.attribute_handle.iter().filter_map(crate::handles::decode_attribute).collect()).unwrap_or_default();
+            let Some(instance) = a.object_instance.as_ref().and_then(decode_object_instance) else {
+                return;
+            };
+            let attrs: Vec<_> = a
+                .attributes
+                .as_ref()
+                .map(|s| {
+                    s.attribute_handle
+                        .iter()
+                        .filter_map(crate::handles::decode_attribute)
+                        .collect()
+                })
+                .unwrap_or_default();
             callbacks.attribute_is_owned_by_rti(instance, attrs).await;
         }
         CB::ConfirmAttributeOwnershipAcquisitionCancellation(c) => {
-            let Some(instance) = c.object_instance.as_ref().and_then(decode_object_instance) else { return };
-            let attrs: Vec<_> = c.attributes.as_ref().map(|s| s.attribute_handle.iter().filter_map(crate::handles::decode_attribute).collect()).unwrap_or_default();
-            callbacks.confirm_attribute_ownership_acquisition_cancellation(instance, attrs).await;
+            let Some(instance) = c.object_instance.as_ref().and_then(decode_object_instance) else {
+                return;
+            };
+            let attrs: Vec<_> = c
+                .attributes
+                .as_ref()
+                .map(|s| {
+                    s.attribute_handle
+                        .iter()
+                        .filter_map(crate::handles::decode_attribute)
+                        .collect()
+                })
+                .unwrap_or_default();
+            callbacks
+                .confirm_attribute_ownership_acquisition_cancellation(instance, attrs)
+                .await;
         }
         CB::RequestRetraction(_r) => {
             callbacks.request_retraction(Vec::new()).await;
         }
         CB::FlushQueueGrant(g) => {
-            let time = g.time.as_ref().and_then(|lt| {
-                if lt.data.len() == 8 { Some(f64::from_be_bytes(lt.data[..].try_into().unwrap())) } else { None }
-            }).unwrap_or(0.0);
+            let time = g
+                .time
+                .as_ref()
+                .and_then(|lt| {
+                    if lt.data.len() == 8 {
+                        Some(f64::from_be_bytes(lt.data[..].try_into().unwrap()))
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0.0);
             callbacks.flush_queue_grant(time, None).await;
         }
         CB::InitiateFederateSaveWithTime(i) => {
-            let time = i.time.as_ref().and_then(|lt| {
-                if lt.data.len() == 8 { Some(f64::from_be_bytes(lt.data[..].try_into().unwrap())) } else { None }
-            }).unwrap_or(0.0);
-            callbacks.initiate_federate_save_with_time(i.label, time).await;
+            let time = i
+                .time
+                .as_ref()
+                .and_then(|lt| {
+                    if lt.data.len() == 8 {
+                        Some(f64::from_be_bytes(lt.data[..].try_into().unwrap()))
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0.0);
+            callbacks
+                .initiate_federate_save_with_time(i.label, time)
+                .await;
         }
         CB::FederationSaveStatusResponse(_) => {
             callbacks.federation_save_status_response().await;
@@ -1712,7 +1923,9 @@ async fn dispatch_callback<A: FederateAmbassador>(
             callbacks.connection_lost(c.fault_description).await;
         }
         CB::FederateResigned(f) => {
-            callbacks.federate_resigned(f.reason_for_resign_description).await;
+            callbacks
+                .federate_resigned(f.reason_for_resign_description)
+                .await;
         }
         CB::ReceiveDirectedInteraction(_) | CB::ReceiveDirectedInteractionWithTime(_) => {
             // Directed-interaction routing not yet implemented end-to-end.

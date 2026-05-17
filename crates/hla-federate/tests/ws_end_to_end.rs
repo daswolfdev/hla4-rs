@@ -79,26 +79,44 @@ async fn pub_sub_over_websocket() {
 
     // Subscriber over WebSocket.
     let rec = Arc::new(Recorder::default());
-    let sub = RtiAmbassador::connect_ws(&url, Arc::clone(&rec)).await.unwrap();
+    let sub = RtiAmbassador::connect_ws(&url, Arc::clone(&rec))
+        .await
+        .unwrap();
     sub.create_federation_execution("ws-fed").await.ok();
-    sub.join_federation_execution("Sub", "ws-fed").await.unwrap();
-    let beacon = sub.get_object_class_handle("HLAobjectRoot.Beacon").await.unwrap();
+    sub.join_federation_execution("Sub", "ws-fed")
+        .await
+        .unwrap();
+    let beacon = sub
+        .get_object_class_handle("HLAobjectRoot.Beacon")
+        .await
+        .unwrap();
     let power = sub.get_attribute_handle(beacon, "Power").await.unwrap();
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(power);
-    sub.subscribe_object_class_attributes(beacon, attrs.clone()).await.unwrap();
+    sub.subscribe_object_class_attributes(beacon, attrs.clone())
+        .await
+        .unwrap();
 
     // Publisher over WebSocket.
     let publisher = RtiAmbassador::connect_ws(&url, Arc::new(Recorder::default()))
         .await
         .unwrap();
     publisher.create_federation_execution("ws-fed").await.ok();
-    publisher.join_federation_execution("Pub", "ws-fed").await.unwrap();
-    publisher.publish_object_class_attributes(beacon, attrs).await.unwrap();
+    publisher
+        .join_federation_execution("Pub", "ws-fed")
+        .await
+        .unwrap();
+    publisher
+        .publish_object_class_attributes(beacon, attrs)
+        .await
+        .unwrap();
     let instance = publisher.register_object_instance(beacon).await.unwrap();
     let mut values = AttributeHandleValueMap::new();
     values.insert(power, 250i32.to_be_bytes().to_vec());
-    publisher.update_attribute_values(instance, values, b"ws-tag").await.unwrap();
+    publisher
+        .update_attribute_values(instance, values, b"ws-tag")
+        .await
+        .unwrap();
 
     let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
     while tokio::time::Instant::now() < deadline {

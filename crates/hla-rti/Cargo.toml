@@ -31,3 +31,6 @@ tracing-subscriber = { workspace = true }
 prost              = { workspace = true }
 hla-fedpro-proto   = { workspace = true }
 rcgen              = "0.13"
+
+[lints]
+workspace = true

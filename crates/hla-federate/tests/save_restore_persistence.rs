@@ -67,7 +67,9 @@ impl FederateAmbassador for Rec {
         federate_name: String,
         post_handle: FederateHandle,
     ) {
-        self.initiate_restore.lock().push((label, federate_name, post_handle));
+        self.initiate_restore
+            .lock()
+            .push((label, federate_name, post_handle));
     }
 }
 
@@ -82,6 +84,8 @@ async fn wait_for<F: Fn() -> bool>(timeout: Duration, f: F) -> bool {
     f()
 }
 
+// `parking_lot::Mutex` guards are explicitly `drop`-ed before each `.await`.
+#[allow(clippy::await_holding_lock)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn save_writes_snapshot_to_disk_then_restore_reads_it() {
     let tmp = std::env::temp_dir().join(format!("hla4-saves-{}", std::process::id()));
@@ -90,14 +94,23 @@ async fn save_writes_snapshot_to_disk_then_restore_reads_it() {
     let url = format!("rti://{addr}");
 
     let rec_a = Arc::new(Rec::default());
-    let a = RtiAmbassador::connect(&url, Arc::clone(&rec_a)).await.unwrap();
+    let a = RtiAmbassador::connect(&url, Arc::clone(&rec_a))
+        .await
+        .unwrap();
     a.create_federation_execution("sr-fed").await.ok();
-    a.join_federation_execution_with_name("Alice", "Producer", "sr-fed").await.unwrap();
-    let class = a.get_object_class_handle("HLAobjectRoot.Widget").await.unwrap();
+    a.join_federation_execution_with_name("Alice", "Producer", "sr-fed")
+        .await
+        .unwrap();
+    let class = a
+        .get_object_class_handle("HLAobjectRoot.Widget")
+        .await
+        .unwrap();
     let state = a.get_attribute_handle(class, "State").await.unwrap();
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(state);
-    a.publish_object_class_attributes(class, attrs).await.unwrap();
+    a.publish_object_class_attributes(class, attrs)
+        .await
+        .unwrap();
     let instance = a.register_object_instance(class).await.unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -106,13 +119,25 @@ async fn save_writes_snapshot_to_disk_then_restore_reads_it() {
     tokio::time::sleep(Duration::from_millis(50)).await;
     a.federate_save_begun().await.unwrap();
     a.federate_save_complete().await.unwrap();
-    assert!(wait_for(Duration::from_secs(1), || rec_a.saved.load(Ordering::Relaxed)).await);
+    assert!(
+        wait_for(Duration::from_secs(1), || rec_a
+            .saved
+            .load(Ordering::Relaxed))
+        .await
+    );
 
     // Snapshot file should exist on disk.
     let snap_path = tmp.join("sr-fed__snap-1.json");
-    assert!(snap_path.exists(), "snapshot file not created: {:?}", snap_path);
+    assert!(
+        snap_path.exists(),
+        "snapshot file not created: {:?}",
+        snap_path
+    );
     let contents = std::fs::read_to_string(&snap_path).unwrap();
-    assert!(contents.contains("HLA"), "expected an instance name in {contents}");
+    assert!(
+        contents.contains("HLA"),
+        "expected an instance name in {contents}"
+    );
     assert!(contents.contains("Alice"));
 
     // Verify in-memory state survives. Now blow it away to simulate restart.
@@ -125,10 +150,12 @@ async fn save_writes_snapshot_to_disk_then_restore_reads_it() {
 
     // Issue restore — should re-populate object_instances from disk.
     a.request_federation_restore("snap-1").await.unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        !rec_a.initiate_restore.lock().is_empty()
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            !rec_a.initiate_restore.lock().is_empty()
+        })
+        .await
+    );
     let init = rec_a.initiate_restore.lock();
     assert_eq!(init[0].0, "snap-1");
     assert_eq!(init[0].1, "Alice");
@@ -144,7 +171,12 @@ async fn save_writes_snapshot_to_disk_then_restore_reads_it() {
     }
 
     a.federate_restore_complete().await.unwrap();
-    assert!(wait_for(Duration::from_secs(1), || rec_a.restored.load(Ordering::Relaxed)).await);
+    assert!(
+        wait_for(Duration::from_secs(1), || rec_a
+            .restored
+            .load(Ordering::Relaxed))
+        .await
+    );
 
     let _ = std::fs::remove_dir_all(&tmp);
 }
@@ -167,9 +199,13 @@ async fn restore_with_missing_snapshot_emits_failure() {
     }
 
     let rec = Arc::new(FailRec::default());
-    let amb = RtiAmbassador::connect(&url, Arc::clone(&rec)).await.unwrap();
+    let amb = RtiAmbassador::connect(&url, Arc::clone(&rec))
+        .await
+        .unwrap();
     amb.create_federation_execution("missing-fed").await.ok();
-    amb.join_federation_execution_with_name("Alice", "Producer", "missing-fed").await.unwrap();
+    amb.join_federation_execution_with_name("Alice", "Producer", "missing-fed")
+        .await
+        .unwrap();
 
     // Request restore for a label that doesn't exist. The server falls
     // through to standard "no snapshot" path; we get a "request succeeded"

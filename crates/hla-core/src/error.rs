@@ -93,6 +93,7 @@ pub enum TimeManagementError {
 }
 
 #[derive(Debug, Error)]
+#[allow(clippy::enum_variant_names)] // matches the IEEE 1516.1 service-group taxonomy
 pub enum RtiError {
     #[error(transparent)]
     FederationManagement(#[from] FederationManagementError),

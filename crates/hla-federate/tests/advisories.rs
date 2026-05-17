@@ -92,36 +92,57 @@ async fn start_registration_fires_on_first_subscriber() {
     let url = format!("rti://{addr}");
 
     let pub_rec = Arc::new(AdvRec::default());
-    let publisher = RtiAmbassador::connect(&url, Arc::clone(&pub_rec)).await.unwrap();
+    let publisher = RtiAmbassador::connect(&url, Arc::clone(&pub_rec))
+        .await
+        .unwrap();
     publisher.create_federation_execution("adv").await.ok();
-    publisher.join_federation_execution("P", "adv").await.unwrap();
-    let class = publisher.get_object_class_handle("HLAobjectRoot.Thing").await.unwrap();
+    publisher
+        .join_federation_execution("P", "adv")
+        .await
+        .unwrap();
+    let class = publisher
+        .get_object_class_handle("HLAobjectRoot.Thing")
+        .await
+        .unwrap();
     let attr = publisher.get_attribute_handle(class, "X").await.unwrap();
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(attr);
-    publisher.publish_object_class_attributes(class, attrs.clone()).await.unwrap();
+    publisher
+        .publish_object_class_attributes(class, attrs.clone())
+        .await
+        .unwrap();
 
     // No subscriber yet — no advisory.
     tokio::time::sleep(Duration::from_millis(100)).await;
     assert_eq!(pub_rec.start.load(Ordering::Relaxed), 0);
 
     // First subscriber appears — publisher should receive Start.
-    let sub = RtiAmbassador::connect(&url, Arc::new(AdvRec::default())).await.unwrap();
+    let sub = RtiAmbassador::connect(&url, Arc::new(AdvRec::default()))
+        .await
+        .unwrap();
     sub.join_federation_execution("S", "adv").await.unwrap();
-    sub.subscribe_object_class_attributes(class, attrs.clone()).await.unwrap();
+    sub.subscribe_object_class_attributes(class, attrs.clone())
+        .await
+        .unwrap();
 
-    assert!(wait_for(Duration::from_secs(1), || {
-        pub_rec.start.load(Ordering::Relaxed) >= 1
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            pub_rec.start.load(Ordering::Relaxed) >= 1
+        })
+        .await
+    );
     assert_eq!(pub_rec.stop.load(Ordering::Relaxed), 0);
 
     // Last subscriber leaves — publisher should receive Stop.
-    sub.unsubscribe_object_class_attributes(class, attrs).await.unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        pub_rec.stop.load(Ordering::Relaxed) >= 1
-    })
-    .await);
+    sub.unsubscribe_object_class_attributes(class, attrs)
+        .await
+        .unwrap();
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            pub_rec.stop.load(Ordering::Relaxed) >= 1
+        })
+        .await
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -130,21 +151,33 @@ async fn turn_interactions_on_fires_on_first_subscriber() {
     let url = format!("rti://{addr}");
 
     let pub_rec = Arc::new(AdvRec::default());
-    let publisher = RtiAmbassador::connect(&url, Arc::clone(&pub_rec)).await.unwrap();
+    let publisher = RtiAmbassador::connect(&url, Arc::clone(&pub_rec))
+        .await
+        .unwrap();
     publisher.create_federation_execution("adv-ix").await.ok();
-    publisher.join_federation_execution("P", "adv-ix").await.unwrap();
-    let class = publisher.get_interaction_class_handle("HLAinteractionRoot.Beep").await.unwrap();
+    publisher
+        .join_federation_execution("P", "adv-ix")
+        .await
+        .unwrap();
+    let class = publisher
+        .get_interaction_class_handle("HLAinteractionRoot.Beep")
+        .await
+        .unwrap();
     publisher.publish_interaction_class(class).await.unwrap();
 
     tokio::time::sleep(Duration::from_millis(100)).await;
     assert_eq!(pub_rec.interactions_on.load(Ordering::Relaxed), 0);
 
-    let sub = RtiAmbassador::connect(&url, Arc::new(AdvRec::default())).await.unwrap();
+    let sub = RtiAmbassador::connect(&url, Arc::new(AdvRec::default()))
+        .await
+        .unwrap();
     sub.join_federation_execution("S", "adv-ix").await.unwrap();
     sub.subscribe_interaction_class(class).await.unwrap();
 
-    assert!(wait_for(Duration::from_secs(1), || {
-        pub_rec.interactions_on.load(Ordering::Relaxed) >= 1
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            pub_rec.interactions_on.load(Ordering::Relaxed) >= 1
+        })
+        .await
+    );
 }

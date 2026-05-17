@@ -23,3 +23,6 @@ async-trait      = { workspace = true }
 [dev-dependencies]
 hla-fedpro-proto = { workspace = true }
 proptest         = { workspace = true }
+
+[lints]
+workspace = true

@@ -13,8 +13,8 @@
 
 use hla_wire::{
     Frame, FrameError, HEADER_SIZE, HlaCallResponsePayload, HlaCallbackResponsePayload,
-    MessageHeader, MessageType, NewSessionPayload, NewSessionStatusPayload,
-    NewSessionStatusReason, ResumeRequestPayload,
+    MessageHeader, MessageType, NewSessionPayload, NewSessionStatusPayload, NewSessionStatusReason,
+    ResumeRequestPayload,
 };
 use proptest::prelude::*;
 
@@ -47,11 +47,9 @@ fn header_strategy() -> impl Strategy<Value = MessageHeader> {
         any::<i32>(),
         message_type_strategy(),
     )
-        .prop_map(
-            |(payload_size, seq, session, last_received, kind)| {
-                MessageHeader::with_payload_size(payload_size, seq, session, last_received, kind)
-            },
-        )
+        .prop_map(|(payload_size, seq, session, last_received, kind)| {
+            MessageHeader::with_payload_size(payload_size, seq, session, last_received, kind)
+        })
 }
 
 fn status_reason_strategy() -> impl Strategy<Value = NewSessionStatusReason> {

@@ -8,3 +8,6 @@ description = "Core HLA types: handles, logical time, errors. No I/O."
 
 [dependencies]
 thiserror = { workspace = true }
+
+[lints]
+workspace = true

@@ -94,27 +94,38 @@ async fn full_sync_point_flow() {
         .unwrap();
 
     // F1 should see Succeeded. Both should see Announce.
-    assert!(wait_for(Duration::from_secs(1), || {
-        r1.registration_succeeded.lock().len() == 1
-            && r1.announces.lock().len() == 1
-            && r2.announces.lock().len() == 1
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            r1.registration_succeeded.lock().len() == 1
+                && r1.announces.lock().len() == 1
+                && r2.announces.lock().len() == 1
+        })
+        .await
+    );
 
     // F1 achieves; nothing happens yet (still waiting for F2).
-    f1.synchronization_point_achieved("ReadyToRun", true).await.unwrap();
+    f1.synchronization_point_achieved("ReadyToRun", true)
+        .await
+        .unwrap();
     tokio::time::sleep(Duration::from_millis(100)).await;
     assert!(r1.synchronized.lock().is_empty());
     assert!(r2.synchronized.lock().is_empty());
 
     // F2 achieves → both get FederationSynchronized.
-    f2.synchronization_point_achieved("ReadyToRun", true).await.unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        !r1.synchronized.lock().is_empty() && !r2.synchronized.lock().is_empty()
-    })
-    .await);
+    f2.synchronization_point_achieved("ReadyToRun", true)
+        .await
+        .unwrap();
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            !r1.synchronized.lock().is_empty() && !r2.synchronized.lock().is_empty()
+        })
+        .await
+    );
     assert_eq!(r1.synchronized.lock()[0].0, "ReadyToRun");
-    assert!(r1.synchronized.lock()[0].1.is_empty(), "no failed federates");
+    assert!(
+        r1.synchronized.lock()[0].1.is_empty(),
+        "no failed federates"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -130,18 +141,22 @@ async fn duplicate_sync_point_label_fails() {
     f.register_federation_synchronization_point("Once", b"")
         .await
         .unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        r.registration_succeeded.lock().len() == 1
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            r.registration_succeeded.lock().len() == 1
+        })
+        .await
+    );
 
     f.register_federation_synchronization_point("Once", b"")
         .await
         .unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        r.registration_failed.lock().len() == 1
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            r.registration_failed.lock().len() == 1
+        })
+        .await
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -163,17 +178,25 @@ async fn failed_to_sync_set_propagates() {
     f1.register_federation_synchronization_point("Maybe", b"")
         .await
         .unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        r1.announces.lock().len() == 1 && r2.announces.lock().len() == 1
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            r1.announces.lock().len() == 1 && r2.announces.lock().len() == 1
+        })
+        .await
+    );
 
     // F1 fails to achieve, F2 achieves.
-    f1.synchronization_point_achieved("Maybe", false).await.unwrap();
-    f2.synchronization_point_achieved("Maybe", true).await.unwrap();
-    assert!(wait_for(Duration::from_secs(1), || {
-        !r1.synchronized.lock().is_empty() && !r2.synchronized.lock().is_empty()
-    })
-    .await);
+    f1.synchronization_point_achieved("Maybe", false)
+        .await
+        .unwrap();
+    f2.synchronization_point_achieved("Maybe", true)
+        .await
+        .unwrap();
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            !r1.synchronized.lock().is_empty() && !r2.synchronized.lock().is_empty()
+        })
+        .await
+    );
     assert_eq!(r1.synchronized.lock()[0].1.len(), 1, "one federate failed");
 }

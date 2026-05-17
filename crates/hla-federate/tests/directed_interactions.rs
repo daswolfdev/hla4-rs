@@ -55,6 +55,7 @@ async fn boot() -> SocketAddr {
 
 #[derive(Default)]
 struct DiRec {
+    #[allow(dead_code)] // retained for symmetry; assertions read counts not contents
     directed: Mutex<Vec<(InteractionClassHandle, ObjectInstanceHandle)>>,
     plain_interactions: AtomicU32,
 }
@@ -83,21 +84,33 @@ async fn directed_interaction_reaches_registrar() {
 
     // Registrar A: registers the Robot instance.
     let rec_a = Arc::new(DiRec::default());
-    let a = RtiAmbassador::connect(&url, Arc::clone(&rec_a)).await.unwrap();
+    let a = RtiAmbassador::connect(&url, Arc::clone(&rec_a))
+        .await
+        .unwrap();
     a.create_federation_execution("di").await.ok();
     a.join_federation_execution("Owner", "di").await.unwrap();
-    let class = a.get_object_class_handle("HLAobjectRoot.Robot").await.unwrap();
+    let class = a
+        .get_object_class_handle("HLAobjectRoot.Robot")
+        .await
+        .unwrap();
     let battery = a.get_attribute_handle(class, "Battery").await.unwrap();
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(battery);
-    a.publish_object_class_attributes(class, attrs).await.unwrap();
+    a.publish_object_class_attributes(class, attrs)
+        .await
+        .unwrap();
     let robot = a.register_object_instance(class).await.unwrap();
 
-    let cmd = a.get_interaction_class_handle("HLAinteractionRoot.Command").await.unwrap();
+    let cmd = a
+        .get_interaction_class_handle("HLAinteractionRoot.Command")
+        .await
+        .unwrap();
 
     // Sender B sends a directed interaction at the Robot.
     let rec_b = Arc::new(DiRec::default());
-    let b = RtiAmbassador::connect(&url, Arc::clone(&rec_b)).await.unwrap();
+    let b = RtiAmbassador::connect(&url, Arc::clone(&rec_b))
+        .await
+        .unwrap();
     b.join_federation_execution("Sender", "di").await.unwrap();
     // Sender needs to publish directed interactions for the class (per spec,
     // PublishObjectClassDirectedInteractions is required).

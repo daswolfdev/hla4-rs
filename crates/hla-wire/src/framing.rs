@@ -64,12 +64,7 @@ pub fn claim_next_outbound_seq(atomic: &std::sync::atomic::AtomicI32) -> i32 {
         } else {
             claimed + 1
         };
-        match atomic.compare_exchange_weak(
-            current,
-            next,
-            Ordering::Relaxed,
-            Ordering::Relaxed,
-        ) {
+        match atomic.compare_exchange_weak(current, next, Ordering::Relaxed, Ordering::Relaxed) {
             Ok(_) => return claimed,
             Err(actual) => current = actual,
         }
@@ -190,8 +185,7 @@ impl MessageHeader {
         }
         let sequence_number = i32::from_be_bytes(bytes[4..8].try_into().unwrap());
         let session_id = u64::from_be_bytes(bytes[8..16].try_into().unwrap());
-        let last_received_sequence_number =
-            i32::from_be_bytes(bytes[16..20].try_into().unwrap());
+        let last_received_sequence_number = i32::from_be_bytes(bytes[16..20].try_into().unwrap());
         let message_type_raw = u32::from_be_bytes(bytes[20..24].try_into().unwrap());
         let message_type = MessageType::from_u32(message_type_raw)?;
         Ok(Self {
@@ -364,8 +358,7 @@ impl ResumeRequestPayload {
     pub fn encode(&self) -> [u8; 8] {
         let mut out = [0u8; 8];
         out[0..4].copy_from_slice(&self.last_received_rti_sequence_number.to_be_bytes());
-        out[4..8]
-            .copy_from_slice(&self.oldest_available_federate_sequence_number.to_be_bytes());
+        out[4..8].copy_from_slice(&self.oldest_available_federate_sequence_number.to_be_bytes());
         out
     }
 
@@ -377,9 +370,7 @@ impl ResumeRequestPayload {
             });
         }
         Ok(Self {
-            last_received_rti_sequence_number: i32::from_be_bytes(
-                bytes[0..4].try_into().unwrap(),
-            ),
+            last_received_rti_sequence_number: i32::from_be_bytes(bytes[0..4].try_into().unwrap()),
             oldest_available_federate_sequence_number: i32::from_be_bytes(
                 bytes[4..8].try_into().unwrap(),
             ),

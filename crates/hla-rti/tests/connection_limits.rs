@@ -46,8 +46,8 @@ async fn max_total_caps_concurrent_connections() {
     // immediately close it, so the client's handshake read will fail.
     let third = TcpStream::connect(addr).await;
     if let Ok(mut s) = third {
-        let result = tokio::time::timeout(Duration::from_millis(300), client_open_session(&mut s))
-            .await;
+        let result =
+            tokio::time::timeout(Duration::from_millis(300), client_open_session(&mut s)).await;
         assert!(
             result.is_err() || result.unwrap().is_err(),
             "third connection beyond max_total should not complete handshake"
@@ -71,7 +71,7 @@ async fn max_per_ip_caps_connections_from_one_host() {
     let mut first = TcpStream::connect(addr).await.unwrap();
     client_open_session(&mut first).await.unwrap();
     let deadline = tokio::time::Instant::now() + Duration::from_millis(500);
-    while node.connections.len() < 1 && tokio::time::Instant::now() < deadline {
+    while node.connections.is_empty() && tokio::time::Instant::now() < deadline {
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
     assert_eq!(node.connections.len(), 1);

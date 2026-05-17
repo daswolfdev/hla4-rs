@@ -11,3 +11,6 @@ hla-core  = { workspace = true }
 quick-xml = { workspace = true }
 serde     = { workspace = true }
 thiserror = { workspace = true }
+
+[lints]
+workspace = true

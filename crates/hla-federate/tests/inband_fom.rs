@@ -82,7 +82,9 @@ async fn create_with_inband_fom_then_publish_subscribe() {
     let url = format!("rti://{addr}");
 
     let rec = Arc::new(Recorder::default());
-    let sub = RtiAmbassador::connect(&url, Arc::clone(&rec)).await.unwrap();
+    let sub = RtiAmbassador::connect(&url, Arc::clone(&rec))
+        .await
+        .unwrap();
 
     // First federate creates with the in-band FOM.
     sub.create_federation_execution_with_modules(
@@ -91,10 +93,18 @@ async fn create_with_inband_fom_then_publish_subscribe() {
     )
     .await
     .unwrap();
-    sub.join_federation_execution("Subscriber", "inband-fed").await.unwrap();
+    sub.join_federation_execution("Subscriber", "inband-fed")
+        .await
+        .unwrap();
 
-    let robot = sub.get_object_class_handle("HLAobjectRoot.Robot").await.unwrap();
-    let battery = sub.get_attribute_handle(robot, "BatteryLevel").await.unwrap();
+    let robot = sub
+        .get_object_class_handle("HLAobjectRoot.Robot")
+        .await
+        .unwrap();
+    let battery = sub
+        .get_attribute_handle(robot, "BatteryLevel")
+        .await
+        .unwrap();
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(battery);
     sub.subscribe_object_class_attributes(robot, attrs.clone())
@@ -109,9 +119,18 @@ async fn create_with_inband_fom_then_publish_subscribe() {
         .join_federation_execution("Publisher", "inband-fed")
         .await
         .unwrap();
-    let robot_p = publisher.get_object_class_handle("HLAobjectRoot.Robot").await.unwrap();
-    let battery_p = publisher.get_attribute_handle(robot_p, "BatteryLevel").await.unwrap();
-    assert_eq!(robot, robot_p, "FOM handle assignment should be deterministic");
+    let robot_p = publisher
+        .get_object_class_handle("HLAobjectRoot.Robot")
+        .await
+        .unwrap();
+    let battery_p = publisher
+        .get_attribute_handle(robot_p, "BatteryLevel")
+        .await
+        .unwrap();
+    assert_eq!(
+        robot, robot_p,
+        "FOM handle assignment should be deterministic"
+    );
     assert_eq!(battery, battery_p);
 
     publisher

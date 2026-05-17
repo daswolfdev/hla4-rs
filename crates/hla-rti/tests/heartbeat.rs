@@ -79,7 +79,10 @@ async fn server_responds_to_client_heartbeat() {
         .await
         .expect("no heartbeat response within budget")
         .expect("read_frame error");
-    assert_eq!(frame.header.message_type, MessageType::CtrlHeartbeatResponse);
+    assert_eq!(
+        frame.header.message_type,
+        MessageType::CtrlHeartbeatResponse
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

@@ -46,20 +46,24 @@ async fn metrics_count_calls_and_sessions() {
     let mut state = ClientSeqState::new(ack.session_id);
 
     let create = fedpro::CallRequest {
-        call_request: Some(fedpro::call_request::CallRequest::CreateFederationExecutionRequest(
-            fedpro::CreateFederationExecutionRequest {
-                federation_name: "metrics-fed".into(),
-                fom_module: None,
-            },
-        )),
+        call_request: Some(
+            fedpro::call_request::CallRequest::CreateFederationExecutionRequest(
+                fedpro::CreateFederationExecutionRequest {
+                    federation_name: "metrics-fed".into(),
+                    fom_module: None,
+                },
+            ),
+        ),
     }
     .encode_to_vec();
     send_hla_call(&mut sock, &mut state, create).await.unwrap();
 
     let list = fedpro::CallRequest {
-        call_request: Some(fedpro::call_request::CallRequest::ListFederationExecutionsRequest(
-            fedpro::ListFederationExecutionsRequest {},
-        )),
+        call_request: Some(
+            fedpro::call_request::CallRequest::ListFederationExecutionsRequest(
+                fedpro::ListFederationExecutionsRequest {},
+            ),
+        ),
     }
     .encode_to_vec();
     send_hla_call(&mut sock, &mut state, list).await.unwrap();
@@ -69,15 +73,19 @@ async fn metrics_count_calls_and_sessions() {
 
     // Second create on same name → exception, increments call_exceptions.
     let create_dup = fedpro::CallRequest {
-        call_request: Some(fedpro::call_request::CallRequest::CreateFederationExecutionRequest(
-            fedpro::CreateFederationExecutionRequest {
-                federation_name: "metrics-fed".into(),
-                fom_module: None,
-            },
-        )),
+        call_request: Some(
+            fedpro::call_request::CallRequest::CreateFederationExecutionRequest(
+                fedpro::CreateFederationExecutionRequest {
+                    federation_name: "metrics-fed".into(),
+                    fom_module: None,
+                },
+            ),
+        ),
     }
     .encode_to_vec();
-    send_hla_call(&mut sock, &mut state, create_dup).await.unwrap();
+    send_hla_call(&mut sock, &mut state, create_dup)
+        .await
+        .unwrap();
 
     // Allow counters to settle.
     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -110,8 +118,8 @@ async fn metrics_count_rejections() {
     // Several beyond-limit attempts.
     for _ in 0..3 {
         if let Ok(mut s) = TcpStream::connect(addr).await {
-            let _ = tokio::time::timeout(Duration::from_millis(200), client_open_session(&mut s))
-                .await;
+            let _ =
+                tokio::time::timeout(Duration::from_millis(200), client_open_session(&mut s)).await;
         }
     }
     tokio::time::sleep(Duration::from_millis(100)).await;

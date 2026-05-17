@@ -13,8 +13,8 @@ use std::time::{Duration, Instant};
 
 use dashmap::DashMap;
 use hla_core::{
-    AttributeHandle, AttributeHandleSet, FederateHandle, InteractionClassHandle,
-    ObjectClassHandle, ObjectInstanceHandle,
+    AttributeHandle, AttributeHandleSet, FederateHandle, InteractionClassHandle, ObjectClassHandle,
+    ObjectInstanceHandle,
 };
 use hla_fedpro_proto::fedpro;
 use hla_omt::MergedFom;
@@ -111,8 +111,7 @@ pub enum RtiServerError {
 
 #[derive(Debug, Default)]
 pub struct SubscriptionMatrix {
-    pub by_attribute:
-        HashMap<(ObjectClassHandle, AttributeHandle), HashSet<FederateHandle>>,
+    pub by_attribute: HashMap<(ObjectClassHandle, AttributeHandle), HashSet<FederateHandle>>,
     pub by_interaction: HashMap<InteractionClassHandle, HashSet<FederateHandle>>,
     /// Reverse index: per object class, a refcount per federate. The count
     /// is the number of *distinct attributes* of that class the federate is
@@ -120,8 +119,7 @@ pub struct SubscriptionMatrix {
     /// "who-cares-about-this-class" lookup (called per object discovery /
     /// instance registration) runs in O(subscribers) instead of scanning
     /// the entire matrix.
-    pub class_subscribers:
-        HashMap<ObjectClassHandle, HashMap<FederateHandle, u32>>,
+    pub class_subscribers: HashMap<ObjectClassHandle, HashMap<FederateHandle, u32>>,
 }
 
 impl SubscriptionMatrix {
@@ -224,8 +222,7 @@ pub struct ObjectInstance {
     pub attribute_owners: HashMap<AttributeHandle, FederateHandle>,
     /// DDM: per-attribute region set used for routing-space matching.
     /// Empty means the attribute is in the unrestricted (default) region.
-    pub attribute_regions:
-        HashMap<AttributeHandle, HashSet<hla_core::RegionHandle>>,
+    pub attribute_regions: HashMap<AttributeHandle, HashSet<hla_core::RegionHandle>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -575,9 +572,7 @@ impl RtiNode {
         let listener = TcpListener::bind(bind_addr)
             .await
             .map_err(RtiServerError::Bind)?;
-        let actual = listener
-            .local_addr()
-            .map_err(RtiServerError::Bind)?;
+        let actual = listener.local_addr().map_err(RtiServerError::Bind)?;
         let node = Arc::new(Self::new(actual));
         Ok((node, listener))
     }
@@ -603,12 +598,16 @@ impl RtiNode {
         loop {
             let (sock, peer) = listener.accept().await.map_err(RtiServerError::Accept)?;
             if let Err(reason) = self.check_limits(peer) {
-                self.metrics.connections_rejected.fetch_add(1, Ordering::Relaxed);
+                self.metrics
+                    .connections_rejected
+                    .fetch_add(1, Ordering::Relaxed);
                 tracing::warn!(peer = %peer, reason, "rejecting connection (limit)");
                 drop(sock);
                 continue;
             }
-            self.metrics.connections_accepted.fetch_add(1, Ordering::Relaxed);
+            self.metrics
+                .connections_accepted
+                .fetch_add(1, Ordering::Relaxed);
             let session_id = self.next_session_id.fetch_add(1, Ordering::Relaxed);
             tracing::info!(peer = %peer, session_id, "federate connected");
             let ip = peer.ip();
@@ -637,11 +636,15 @@ impl RtiNode {
         loop {
             let (sock, peer) = listener.accept().await.map_err(RtiServerError::Accept)?;
             if let Err(reason) = self.check_limits(peer) {
-                self.metrics.connections_rejected.fetch_add(1, Ordering::Relaxed);
+                self.metrics
+                    .connections_rejected
+                    .fetch_add(1, Ordering::Relaxed);
                 tracing::warn!(peer = %peer, reason, "rejecting WS connection (limit)");
                 continue;
             }
-            self.metrics.connections_accepted.fetch_add(1, Ordering::Relaxed);
+            self.metrics
+                .connections_accepted
+                .fetch_add(1, Ordering::Relaxed);
             let session_id = self.next_session_id.fetch_add(1, Ordering::Relaxed);
             let ip = peer.ip();
             *self.connections_per_ip.entry(ip).or_insert(0) += 1;
@@ -660,11 +663,7 @@ impl RtiNode {
                 tracing::info!(peer = %peer, session_id, "federate connected (WS)");
                 let (source, sink) = hla_wire::split_ws(ws);
                 let r = Arc::clone(&node)
-                    .handle_connection_via_transport(
-                        Box::new(source),
-                        Box::new(sink),
-                        session_id,
-                    )
+                    .handle_connection_via_transport(Box::new(source), Box::new(sink), session_id)
                     .await;
                 if let Some(mut entry) = node.connections_per_ip.get_mut(&ip) {
                     *entry = entry.saturating_sub(1);
@@ -736,10 +735,8 @@ impl RtiNode {
     {
         // Wrap the byte stream into our frame-transport abstraction.
         let (read_half, write_half) = tokio::io::split(sock);
-        let source: Box<dyn FrameSource + Send + 'static> =
-            Box::new(AsyncReadSource(read_half));
-        let sink: Box<dyn FrameSink + Send + 'static> =
-            Box::new(AsyncWriteSink(write_half));
+        let source: Box<dyn FrameSource + Send + 'static> = Box::new(AsyncReadSource(read_half));
+        let sink: Box<dyn FrameSink + Send + 'static> = Box::new(AsyncWriteSink(write_half));
         self.handle_connection_via_transport(source, sink, session_id)
             .await
     }
@@ -761,9 +758,7 @@ impl RtiNode {
                 // Validate payload + reply with status.
                 let payload = hla_wire::NewSessionPayload::decode(&first.payload)
                     .map_err(|e| SessionError::Codec(hla_wire::CodecError::Frame(e)))?;
-                let reason = if payload.protocol_version
-                    == hla_wire::FEDERATE_PROTOCOL_VERSION
-                {
+                let reason = if payload.protocol_version == hla_wire::FEDERATE_PROTOCOL_VERSION {
                     hla_wire::NewSessionStatusReason::Success
                 } else {
                     hla_wire::NewSessionStatusReason::UnsupportedProtocolVersion
@@ -776,7 +771,8 @@ impl RtiNode {
                     first.header.sequence_number,
                     MessageType::CtrlNewSessionStatus,
                 );
-                sink.send_frame(&Frame::new(header, status.encode().to_vec())).await?;
+                sink.send_frame(&Frame::new(header, status.encode().to_vec()))
+                    .await?;
                 if reason != hla_wire::NewSessionStatusReason::Success {
                     return Err(SessionError::UnsupportedProtocolVersion(
                         payload.protocol_version,
@@ -789,11 +785,11 @@ impl RtiNode {
                 let restored = self.suspended_sessions.remove(&requested_id);
                 let (reason, restored_membership) = match restored {
                     Some((_, mut s)) if s.deadline > Instant::now() => {
-                        tracing::info!(
-                            requested_id,
-                            "resuming suspended session"
-                        );
-                        (hla_wire::NewSessionStatusReason::Success, s.membership.take())
+                        tracing::info!(requested_id, "resuming suspended session");
+                        (
+                            hla_wire::NewSessionStatusReason::Success,
+                            s.membership.take(),
+                        )
                     }
                     _ => {
                         tracing::warn!(
@@ -816,7 +812,8 @@ impl RtiNode {
                     first.header.sequence_number,
                     MessageType::CtrlResumeStatus,
                 );
-                sink.send_frame(&Frame::new(header, status.encode().to_vec())).await?;
+                sink.send_frame(&Frame::new(header, status.encode().to_vec()))
+                    .await?;
                 if reason != hla_wire::NewSessionStatusReason::Success {
                     return Ok(());
                 }
@@ -887,14 +884,8 @@ impl RtiNode {
 
         let mut ctx = SessionContext::new(session_id);
         ctx.membership = restored_membership;
-        let result = Self::run_session_loop(
-            &self,
-            &mut *source,
-            &connection,
-            &mut ctx,
-            hb_config,
-        )
-        .await;
+        let result =
+            Self::run_session_loop(&self, &mut *source, &connection, &mut ctx, hb_config).await;
 
         let reconnect_window = hb_config.reconnect_window;
         if reconnect_window > Duration::ZERO && ctx.membership.is_some() {
@@ -955,7 +946,10 @@ impl RtiNode {
                 if let Some((_, mut s)) = self.suspended_sessions.remove(&sid)
                     && let Some(m) = s.membership.take()
                 {
-                    tracing::info!(session_id = sid, "suspended session expired — auto-resigning");
+                    tracing::info!(
+                        session_id = sid,
+                        "suspended session expired — auto-resigning"
+                    );
                     m.federation.federates.write().remove(&m.federate_handle);
                 }
             }
@@ -1022,7 +1016,9 @@ impl RtiNode {
 
             match frame.header.message_type {
                 MessageType::HlaCallRequest => {
-                    node.metrics.calls_dispatched.fetch_add(1, Ordering::Relaxed);
+                    node.metrics
+                        .calls_dispatched
+                        .fetch_add(1, Ordering::Relaxed);
                     let outcome = match fedpro::CallRequest::decode(&frame.payload[..]) {
                         Ok(req) => dispatch::dispatch_call(node, ctx, req),
                         Err(e) => {
@@ -1107,7 +1103,10 @@ impl RtiNode {
                         last_received_seq,
                         MessageType::CtrlSessionTerminated,
                     );
-                    let _ = connection.frame_tx.send(Frame::new(header, Vec::new())).await;
+                    let _ = connection
+                        .frame_tx
+                        .send(Frame::new(header, Vec::new()))
+                        .await;
                     return Ok(());
                 }
                 MessageType::HlaCallbackResponse => {

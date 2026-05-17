@@ -95,7 +95,9 @@ async fn n_federates_no_callbacks_lost() {
         if i == 0 {
             amb.create_federation_execution("stress").await.unwrap();
         }
-        amb.join_federation_execution(&format!("F{i}"), "stress").await.unwrap();
+        amb.join_federation_execution(&format!("F{i}"), "stress")
+            .await
+            .unwrap();
         federates.push((amb, counter));
     }
 
@@ -158,7 +160,9 @@ async fn n_federates_no_callbacks_lost() {
             for k in 0..M_UPDATES {
                 let mut values = AttributeHandleValueMap::new();
                 values.insert(attr, (k as i32).to_be_bytes().to_vec());
-                amb.update_attribute_values(instance, values, &[]).await.unwrap();
+                amb.update_attribute_values(instance, values, &[])
+                    .await
+                    .unwrap();
             }
         }));
     }

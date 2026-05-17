@@ -8,3 +8,6 @@ description = "HLA standard MIM data types (HLAinteger32BE, HLAfixedRecord, ...)
 
 [dependencies]
 thiserror = { workspace = true }
+
+[lints]
+workspace = true

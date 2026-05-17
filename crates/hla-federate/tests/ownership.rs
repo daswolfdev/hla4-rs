@@ -90,7 +90,9 @@ async fn join_setup_generic<A: hla_federate::FederateAmbassador + 'static>(
     if create {
         amb.create_federation_execution("own-fed").await.ok();
     }
-    amb.join_federation_execution(fed_type, "own-fed").await.unwrap();
+    amb.join_federation_execution(fed_type, "own-fed")
+        .await
+        .unwrap();
     amb
 }
 
@@ -102,8 +104,14 @@ async fn registrar_owns_published_attributes() {
     let rec_pub = Arc::new(OwnerRec::default());
     let publisher = join_setup(&url, "P", "Publisher", true, rec_pub).await;
 
-    let sensor = publisher.get_object_class_handle("HLAobjectRoot.Sensor").await.unwrap();
-    let reading = publisher.get_attribute_handle(sensor, "Reading").await.unwrap();
+    let sensor = publisher
+        .get_object_class_handle("HLAobjectRoot.Sensor")
+        .await
+        .unwrap();
+    let reading = publisher
+        .get_attribute_handle(sensor, "Reading")
+        .await
+        .unwrap();
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(reading);
     publisher
@@ -113,7 +121,12 @@ async fn registrar_owns_published_attributes() {
     let instance = publisher.register_object_instance(sensor).await.unwrap();
 
     // Publisher owns Reading.
-    assert!(publisher.is_attribute_owned_by_federate(instance, reading).await.unwrap());
+    assert!(
+        publisher
+            .is_attribute_owned_by_federate(instance, reading)
+            .await
+            .unwrap()
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -123,21 +136,33 @@ async fn non_owner_update_returns_attribute_not_owned() {
 
     let rec_a = Arc::new(OwnerRec::default());
     let amb_a = join_setup(&url, "A", "Publisher", true, rec_a).await;
-    let sensor = amb_a.get_object_class_handle("HLAobjectRoot.Sensor").await.unwrap();
+    let sensor = amb_a
+        .get_object_class_handle("HLAobjectRoot.Sensor")
+        .await
+        .unwrap();
     let reading = amb_a.get_attribute_handle(sensor, "Reading").await.unwrap();
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(reading);
-    amb_a.publish_object_class_attributes(sensor, attrs.clone()).await.unwrap();
+    amb_a
+        .publish_object_class_attributes(sensor, attrs.clone())
+        .await
+        .unwrap();
     let instance = amb_a.register_object_instance(sensor).await.unwrap();
 
     // B joins and publishes the class (so registerObjectInstance would
     // succeed for it), but tries to update A's instance — should fail.
     let rec_b = Arc::new(OwnerRec::default());
     let amb_b = join_setup(&url, "B", "Other", false, rec_b).await;
-    amb_b.publish_object_class_attributes(sensor, attrs.clone()).await.unwrap();
+    amb_b
+        .publish_object_class_attributes(sensor, attrs.clone())
+        .await
+        .unwrap();
     let mut values = AttributeHandleValueMap::new();
     values.insert(reading, 7i32.to_be_bytes().to_vec());
-    let err = amb_b.update_attribute_values(instance, values, &[]).await.unwrap_err();
+    let err = amb_b
+        .update_attribute_values(instance, values, &[])
+        .await
+        .unwrap_err();
     match err {
         hla_federate::CallError::RtiException { name, .. } => {
             assert_eq!(name, "AttributeNotOwned");
@@ -153,23 +178,39 @@ async fn divestiture_clears_ownership() {
 
     let rec = Arc::new(OwnerRec::default());
     let amb = join_setup(&url, "P", "Publisher", true, Arc::clone(&rec)).await;
-    let sensor = amb.get_object_class_handle("HLAobjectRoot.Sensor").await.unwrap();
+    let sensor = amb
+        .get_object_class_handle("HLAobjectRoot.Sensor")
+        .await
+        .unwrap();
     let reading = amb.get_attribute_handle(sensor, "Reading").await.unwrap();
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(reading);
-    amb.publish_object_class_attributes(sensor, attrs.clone()).await.unwrap();
+    amb.publish_object_class_attributes(sensor, attrs.clone())
+        .await
+        .unwrap();
     let instance = amb.register_object_instance(sensor).await.unwrap();
-    assert!(amb.is_attribute_owned_by_federate(instance, reading).await.unwrap());
+    assert!(
+        amb.is_attribute_owned_by_federate(instance, reading)
+            .await
+            .unwrap()
+    );
 
     amb.unconditional_attribute_ownership_divestiture(instance, attrs, b"goodbye")
         .await
         .unwrap();
-    assert!(!amb.is_attribute_owned_by_federate(instance, reading).await.unwrap());
+    assert!(
+        !amb.is_attribute_owned_by_federate(instance, reading)
+            .await
+            .unwrap()
+    );
 
     // Subsequent update fails: attribute is no longer owned.
     let mut values = AttributeHandleValueMap::new();
     values.insert(reading, 1i32.to_be_bytes().to_vec());
-    let err = amb.update_attribute_values(instance, values, &[]).await.unwrap_err();
+    let err = amb
+        .update_attribute_values(instance, values, &[])
+        .await
+        .unwrap_err();
     assert!(matches!(
         err,
         hla_federate::CallError::RtiException { ref name, .. } if name == "AttributeNotOwned"
@@ -184,11 +225,17 @@ async fn acquisition_if_available_grants_unowned_attrs() {
     // Owner A divests, then B acquires-if-available.
     let rec_a = Arc::new(OwnerRec::default());
     let amb_a = join_setup(&url, "A", "OrigOwner", true, Arc::clone(&rec_a)).await;
-    let sensor = amb_a.get_object_class_handle("HLAobjectRoot.Sensor").await.unwrap();
+    let sensor = amb_a
+        .get_object_class_handle("HLAobjectRoot.Sensor")
+        .await
+        .unwrap();
     let reading = amb_a.get_attribute_handle(sensor, "Reading").await.unwrap();
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(reading);
-    amb_a.publish_object_class_attributes(sensor, attrs.clone()).await.unwrap();
+    amb_a
+        .publish_object_class_attributes(sensor, attrs.clone())
+        .await
+        .unwrap();
     let instance = amb_a.register_object_instance(sensor).await.unwrap();
     amb_a
         .unconditional_attribute_ownership_divestiture(instance, attrs.clone(), b"")
@@ -235,7 +282,12 @@ async fn acquisition_if_available_grants_unowned_attrs() {
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
     assert!(rec_b.notified.load(Ordering::Relaxed) >= 1);
-    assert!(amb_b.is_attribute_owned_by_federate(instance, reading).await.unwrap());
+    assert!(
+        amb_b
+            .is_attribute_owned_by_federate(instance, reading)
+            .await
+            .unwrap()
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -245,11 +297,17 @@ async fn acquisition_if_available_reports_owned_attrs_unavailable() {
 
     let rec_a = Arc::new(OwnerRec::default());
     let amb_a = join_setup(&url, "A", "Owner", true, Arc::clone(&rec_a)).await;
-    let sensor = amb_a.get_object_class_handle("HLAobjectRoot.Sensor").await.unwrap();
+    let sensor = amb_a
+        .get_object_class_handle("HLAobjectRoot.Sensor")
+        .await
+        .unwrap();
     let reading = amb_a.get_attribute_handle(sensor, "Reading").await.unwrap();
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(reading);
-    amb_a.publish_object_class_attributes(sensor, attrs.clone()).await.unwrap();
+    amb_a
+        .publish_object_class_attributes(sensor, attrs.clone())
+        .await
+        .unwrap();
     let instance = amb_a.register_object_instance(sensor).await.unwrap();
     // A keeps ownership — does NOT divest.
 
@@ -284,7 +342,12 @@ async fn acquisition_if_available_reports_owned_attrs_unavailable() {
     }
     assert!(rec_b.unavailable.load(Ordering::Relaxed) >= 1);
     // A still owns.
-    assert!(amb_a.is_attribute_owned_by_federate(instance, reading).await.unwrap());
+    assert!(
+        amb_a
+            .is_attribute_owned_by_federate(instance, reading)
+            .await
+            .unwrap()
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -294,14 +357,21 @@ async fn query_ownership_callbacks() {
 
     let rec = Arc::new(OwnerRec::default());
     let amb = join_setup(&url, "P", "Publisher", true, Arc::clone(&rec)).await;
-    let sensor = amb.get_object_class_handle("HLAobjectRoot.Sensor").await.unwrap();
+    let sensor = amb
+        .get_object_class_handle("HLAobjectRoot.Sensor")
+        .await
+        .unwrap();
     let reading = amb.get_attribute_handle(sensor, "Reading").await.unwrap();
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(reading);
-    amb.publish_object_class_attributes(sensor, attrs.clone()).await.unwrap();
+    amb.publish_object_class_attributes(sensor, attrs.clone())
+        .await
+        .unwrap();
     let instance = amb.register_object_instance(sensor).await.unwrap();
 
-    amb.query_attribute_ownership(instance, attrs.clone()).await.unwrap();
+    amb.query_attribute_ownership(instance, attrs.clone())
+        .await
+        .unwrap();
 
     let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
     while tokio::time::Instant::now() < deadline {

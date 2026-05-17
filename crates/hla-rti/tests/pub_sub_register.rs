@@ -91,32 +91,36 @@ fn encode(v: fedpro::call_request::CallRequest) -> Vec<u8> {
 }
 
 fn decode(b: &[u8]) -> fedpro::call_response::CallResponse {
-    fedpro::CallResponse::decode(b).unwrap().call_response.unwrap()
+    fedpro::CallResponse::decode(b)
+        .unwrap()
+        .call_response
+        .unwrap()
 }
 
-async fn open_and_join(
-    addr: SocketAddr,
-    federation: &str,
-) -> (TcpStream, ClientSeqState) {
+async fn open_and_join(addr: SocketAddr, federation: &str) -> (TcpStream, ClientSeqState) {
     let mut sock = TcpStream::connect(addr).await.unwrap();
     let ack = client_open_session(&mut sock).await.unwrap();
     let mut state = ClientSeqState::new(ack.session_id);
 
     // Create-if-missing then join.
-    let create = encode(fedpro::call_request::CallRequest::CreateFederationExecutionRequest(
-        fedpro::CreateFederationExecutionRequest {
-            federation_name: federation.into(),
-            fom_module: None,
-        },
-    ));
+    let create = encode(
+        fedpro::call_request::CallRequest::CreateFederationExecutionRequest(
+            fedpro::CreateFederationExecutionRequest {
+                federation_name: federation.into(),
+                fom_module: None,
+            },
+        ),
+    );
     let _ = send_hla_call(&mut sock, &mut state, create).await.unwrap(); // ignore conflict
 
-    let join = encode(fedpro::call_request::CallRequest::JoinFederationExecutionRequest(
-        fedpro::JoinFederationExecutionRequest {
-            federate_type: "Tester".into(),
-            federation_name: federation.into(),
-        },
-    ));
+    let join = encode(
+        fedpro::call_request::CallRequest::JoinFederationExecutionRequest(
+            fedpro::JoinFederationExecutionRequest {
+                federate_type: "Tester".into(),
+                federation_name: federation.into(),
+            },
+        ),
+    );
     let resp = send_hla_call(&mut sock, &mut state, join).await.unwrap();
     let _ = decode(&resp);
     (sock, state)
@@ -127,11 +131,13 @@ async fn get_object_class_handle(
     state: &mut ClientSeqState,
     name: &str,
 ) -> fedpro::call_response::CallResponse {
-    let req = encode(fedpro::call_request::CallRequest::GetObjectClassHandleRequest(
-        fedpro::GetObjectClassHandleRequest {
-            object_class_name: name.into(),
-        },
-    ));
+    let req = encode(
+        fedpro::call_request::CallRequest::GetObjectClassHandleRequest(
+            fedpro::GetObjectClassHandleRequest {
+                object_class_name: name.into(),
+            },
+        ),
+    );
     let resp = send_hla_call(sock, state, req).await.unwrap();
     decode(&resp)
 }
@@ -150,11 +156,13 @@ async fn handle_lookup_roundtrip() {
     assert_eq!(food_handle.data.len(), 4);
 
     // Inverse: handle → name
-    let req = encode(fedpro::call_request::CallRequest::GetObjectClassNameRequest(
-        fedpro::GetObjectClassNameRequest {
-            object_class: Some(food_handle.clone()),
-        },
-    ));
+    let req = encode(
+        fedpro::call_request::CallRequest::GetObjectClassNameRequest(
+            fedpro::GetObjectClassNameRequest {
+                object_class: Some(food_handle.clone()),
+            },
+        ),
+    );
     let resp = send_hla_call(&mut sock, &mut state, req).await.unwrap();
     match decode(&resp) {
         fedpro::call_response::CallResponse::GetObjectClassNameResponse(r) => {
@@ -164,12 +172,14 @@ async fn handle_lookup_roundtrip() {
     }
 
     // Attribute lookup
-    let req = encode(fedpro::call_request::CallRequest::GetAttributeHandleRequest(
-        fedpro::GetAttributeHandleRequest {
-            object_class: Some(food_handle.clone()),
-            attribute_name: "Color".into(),
-        },
-    ));
+    let req = encode(
+        fedpro::call_request::CallRequest::GetAttributeHandleRequest(
+            fedpro::GetAttributeHandleRequest {
+                object_class: Some(food_handle.clone()),
+                attribute_name: "Color".into(),
+            },
+        ),
+    );
     let resp = send_hla_call(&mut sock, &mut state, req).await.unwrap();
     let color_handle = match decode(&resp) {
         fedpro::call_response::CallResponse::GetAttributeHandleResponse(r) => r.result.unwrap(),
@@ -178,12 +188,14 @@ async fn handle_lookup_roundtrip() {
     assert_eq!(color_handle.data.len(), 4);
 
     // Unknown attribute name
-    let req = encode(fedpro::call_request::CallRequest::GetAttributeHandleRequest(
-        fedpro::GetAttributeHandleRequest {
-            object_class: Some(food_handle),
-            attribute_name: "NoSuch".into(),
-        },
-    ));
+    let req = encode(
+        fedpro::call_request::CallRequest::GetAttributeHandleRequest(
+            fedpro::GetAttributeHandleRequest {
+                object_class: Some(food_handle),
+                attribute_name: "NoSuch".into(),
+            },
+        ),
+    );
     let resp = send_hla_call(&mut sock, &mut state, req).await.unwrap();
     let exc = match decode(&resp) {
         fedpro::call_response::CallResponse::ExceptionData(e) => e,
@@ -212,12 +224,14 @@ async fn interaction_handle_lookup() {
         other => panic!("unexpected: {other:?}"),
     };
 
-    let req = encode(fedpro::call_request::CallRequest::GetParameterHandleRequest(
-        fedpro::GetParameterHandleRequest {
-            interaction_class: Some(ix_handle),
-            parameter_name: "FoodType".into(),
-        },
-    ));
+    let req = encode(
+        fedpro::call_request::CallRequest::GetParameterHandleRequest(
+            fedpro::GetParameterHandleRequest {
+                interaction_class: Some(ix_handle),
+                parameter_name: "FoodType".into(),
+            },
+        ),
+    );
     let resp = send_hla_call(&mut sock, &mut state, req).await.unwrap();
     assert!(matches!(
         decode(&resp),
@@ -233,12 +247,14 @@ async fn lookup_handles(
         fedpro::call_response::CallResponse::GetObjectClassHandleResponse(r) => r.result.unwrap(),
         _ => panic!(),
     };
-    let req = encode(fedpro::call_request::CallRequest::GetAttributeHandleRequest(
-        fedpro::GetAttributeHandleRequest {
-            object_class: Some(drink.clone()),
-            attribute_name: "NumberCups".into(),
-        },
-    ));
+    let req = encode(
+        fedpro::call_request::CallRequest::GetAttributeHandleRequest(
+            fedpro::GetAttributeHandleRequest {
+                object_class: Some(drink.clone()),
+                attribute_name: "NumberCups".into(),
+            },
+        ),
+    );
     let resp = send_hla_call(sock, state, req).await.unwrap();
     let attr = match decode(&resp) {
         fedpro::call_response::CallResponse::GetAttributeHandleResponse(r) => r.result.unwrap(),
@@ -271,11 +287,13 @@ async fn publish_then_register_object_instance() {
     ));
 
     // Register an instance — should now succeed.
-    let req = encode(fedpro::call_request::CallRequest::RegisterObjectInstanceRequest(
-        fedpro::RegisterObjectInstanceRequest {
-            object_class: Some(drink.clone()),
-        },
-    ));
+    let req = encode(
+        fedpro::call_request::CallRequest::RegisterObjectInstanceRequest(
+            fedpro::RegisterObjectInstanceRequest {
+                object_class: Some(drink.clone()),
+            },
+        ),
+    );
     let resp = send_hla_call(&mut sock, &mut state, req).await.unwrap();
     let inst = match decode(&resp) {
         fedpro::call_response::CallResponse::RegisterObjectInstanceResponse(r) => r.result.unwrap(),
@@ -298,11 +316,13 @@ async fn register_without_publish_fails() {
     let (mut sock, mut state) = open_and_join(addr, "fed-no-pub").await;
     let (drink, _cups) = lookup_handles(&mut sock, &mut state).await;
 
-    let req = encode(fedpro::call_request::CallRequest::RegisterObjectInstanceRequest(
-        fedpro::RegisterObjectInstanceRequest {
-            object_class: Some(drink),
-        },
-    ));
+    let req = encode(
+        fedpro::call_request::CallRequest::RegisterObjectInstanceRequest(
+            fedpro::RegisterObjectInstanceRequest {
+                object_class: Some(drink),
+            },
+        ),
+    );
     let resp = send_hla_call(&mut sock, &mut state, req).await.unwrap();
     let exc = match decode(&resp) {
         fedpro::call_response::CallResponse::ExceptionData(e) => e,
@@ -343,7 +363,10 @@ async fn subscribe_populates_federation_subscription_matrix() {
         hla_core::ObjectClassHandle::new(drink_raw),
         hla_core::AttributeHandle::new(cups_raw),
     );
-    let subscribers = subs.by_attribute.get(&key).expect("subscriber entry missing");
+    let subscribers = subs
+        .by_attribute
+        .get(&key)
+        .expect("subscriber entry missing");
     assert_eq!(subscribers.len(), 1);
 }
 
@@ -391,7 +414,7 @@ async fn unsubscribe_clears_federation_subscription_matrix() {
         hla_core::AttributeHandle::new(cups_raw),
     );
     assert!(
-        subs.by_attribute.get(&key).is_none(),
+        !subs.by_attribute.contains_key(&key),
         "subscription should have been removed"
     );
 }
@@ -416,21 +439,25 @@ async fn publish_subscribe_interaction_class() {
         _ => panic!(),
     };
 
-    let pub_req = encode(fedpro::call_request::CallRequest::PublishInteractionClassRequest(
-        fedpro::PublishInteractionClassRequest {
-            interaction_class: Some(ix.clone()),
-        },
-    ));
+    let pub_req = encode(
+        fedpro::call_request::CallRequest::PublishInteractionClassRequest(
+            fedpro::PublishInteractionClassRequest {
+                interaction_class: Some(ix.clone()),
+            },
+        ),
+    );
     assert!(matches!(
         decode(&send_hla_call(&mut sock, &mut state, pub_req).await.unwrap()),
         fedpro::call_response::CallResponse::PublishInteractionClassResponse(_)
     ));
 
-    let sub_req = encode(fedpro::call_request::CallRequest::SubscribeInteractionClassRequest(
-        fedpro::SubscribeInteractionClassRequest {
-            interaction_class: Some(ix.clone()),
-        },
-    ));
+    let sub_req = encode(
+        fedpro::call_request::CallRequest::SubscribeInteractionClassRequest(
+            fedpro::SubscribeInteractionClassRequest {
+                interaction_class: Some(ix.clone()),
+            },
+        ),
+    );
     assert!(matches!(
         decode(&send_hla_call(&mut sock, &mut state, sub_req).await.unwrap()),
         fedpro::call_response::CallResponse::SubscribeInteractionClassResponse(_)
@@ -464,22 +491,28 @@ async fn register_object_instance_with_name_conflict() {
     let _ = send_hla_call(&mut sock, &mut state, pub_req).await.unwrap();
 
     let reg = |name: &str| {
-        encode(fedpro::call_request::CallRequest::RegisterObjectInstanceWithNameRequest(
-            fedpro::RegisterObjectInstanceWithNameRequest {
-                object_class: Some(drink.clone()),
-                object_instance_name: name.into(),
-            },
-        ))
+        encode(
+            fedpro::call_request::CallRequest::RegisterObjectInstanceWithNameRequest(
+                fedpro::RegisterObjectInstanceWithNameRequest {
+                    object_class: Some(drink.clone()),
+                    object_instance_name: name.into(),
+                },
+            ),
+        )
     };
 
-    let resp = send_hla_call(&mut sock, &mut state, reg("Cola")).await.unwrap();
+    let resp = send_hla_call(&mut sock, &mut state, reg("Cola"))
+        .await
+        .unwrap();
     assert!(matches!(
         decode(&resp),
         fedpro::call_response::CallResponse::RegisterObjectInstanceWithNameResponse(_)
     ));
 
     // Second register with the same name → exception.
-    let resp = send_hla_call(&mut sock, &mut state, reg("Cola")).await.unwrap();
+    let resp = send_hla_call(&mut sock, &mut state, reg("Cola"))
+        .await
+        .unwrap();
     let exc = match decode(&resp) {
         fedpro::call_response::CallResponse::ExceptionData(e) => e,
         other => panic!("expected exception, got {other:?}"),

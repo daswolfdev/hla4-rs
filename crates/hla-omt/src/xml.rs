@@ -7,8 +7,8 @@
 use serde::Deserialize;
 
 use crate::{
-    AttributeDef, FomError, FomModule, InteractionClassDef, ModuleIdentification,
-    ObjectClassDef, OrderTypeRef, Ownership, ParameterDef, Sharing, UpdateType,
+    AttributeDef, FomError, FomModule, InteractionClassDef, ModuleIdentification, ObjectClassDef,
+    OrderTypeRef, Ownership, ParameterDef, Sharing, UpdateType,
 };
 
 pub(crate) fn parse_fom_module(xml_input: &str) -> Result<FomModule, FomError> {
@@ -373,7 +373,10 @@ mod tests {
 
     #[test]
     fn rejects_unknown_enum_value() {
-        let bad = MINI_FOM.replace("<updateType>Static</updateType>", "<updateType>Bogus</updateType>");
+        let bad = MINI_FOM.replace(
+            "<updateType>Static</updateType>",
+            "<updateType>Bogus</updateType>",
+        );
         let err = parse_fom_module(&bad).unwrap_err();
         assert!(matches!(err, FomError::InvalidEnum(_)));
     }

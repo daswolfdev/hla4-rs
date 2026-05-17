@@ -83,53 +83,67 @@ async fn overlapping_regions_route_update() {
 
     // Subscriber's region [50, 150] on dim X.
     let rec_b = Arc::new(Rec::default());
-    let b = RtiAmbassador::connect(&url, Arc::clone(&rec_b)).await.unwrap();
+    let b = RtiAmbassador::connect(&url, Arc::clone(&rec_b))
+        .await
+        .unwrap();
     b.create_federation_execution("region").await.ok();
     b.join_federation_execution("B", "region").await.unwrap();
-    let class = b.get_object_class_handle("HLAobjectRoot.Mover").await.unwrap();
+    let class = b
+        .get_object_class_handle("HLAobjectRoot.Mover")
+        .await
+        .unwrap();
     let x = b.get_attribute_handle(class, "X").await.unwrap();
     let dim_x = DimensionHandle::new(1);
 
     let sub_region = b.create_region(&[dim_x]).await.unwrap();
-    b.set_range_bounds(sub_region, dim_x, 50, 150).await.unwrap();
+    b.set_range_bounds(sub_region, dim_x, 50, 150)
+        .await
+        .unwrap();
     b.commit_region_modifications(&[sub_region]).await.unwrap();
 
     // Use raw call for subscribe-with-regions.
     use hla_fedpro_proto::fedpro;
-    let sub_req = fedpro::call_request::CallRequest::SubscribeObjectClassAttributesWithRegionsRequest(
-        fedpro::SubscribeObjectClassAttributesWithRegionsRequest {
-            object_class: Some(fedpro::ObjectClassHandle {
-                data: class.raw().to_be_bytes().to_vec(),
-            }),
-            active: true,
-            attributes_and_regions: Some(fedpro::AttributeSetRegionSetPairList {
-                attribute_set_region_set_pair: vec![fedpro::AttributeSetRegionSetPair {
-                    attribute_set: Some(fedpro::AttributeHandleSet {
-                        attribute_handle: vec![fedpro::AttributeHandle {
-                            data: x.raw().to_be_bytes().to_vec(),
-                        }],
-                    }),
-                    region_set: Some(fedpro::RegionHandleSet {
-                        region_handle: vec![fedpro::RegionHandle {
-                            data: sub_region.raw().to_be_bytes().to_vec(),
-                        }],
-                    }),
-                }],
-            }),
-        },
-    );
+    let sub_req =
+        fedpro::call_request::CallRequest::SubscribeObjectClassAttributesWithRegionsRequest(
+            fedpro::SubscribeObjectClassAttributesWithRegionsRequest {
+                object_class: Some(fedpro::ObjectClassHandle {
+                    data: class.raw().to_be_bytes().to_vec(),
+                }),
+                active: true,
+                attributes_and_regions: Some(fedpro::AttributeSetRegionSetPairList {
+                    attribute_set_region_set_pair: vec![fedpro::AttributeSetRegionSetPair {
+                        attribute_set: Some(fedpro::AttributeHandleSet {
+                            attribute_handle: vec![fedpro::AttributeHandle {
+                                data: x.raw().to_be_bytes().to_vec(),
+                            }],
+                        }),
+                        region_set: Some(fedpro::RegionHandleSet {
+                            region_handle: vec![fedpro::RegionHandle {
+                                data: sub_region.raw().to_be_bytes().to_vec(),
+                            }],
+                        }),
+                    }],
+                }),
+            },
+        );
     b.raw_call_for_test(sub_req).await.unwrap();
 
     // Publisher creates an OVERLAPPING region [100, 200].
     let rec_a = Arc::new(Rec::default());
-    let a = RtiAmbassador::connect(&url, Arc::clone(&rec_a)).await.unwrap();
+    let a = RtiAmbassador::connect(&url, Arc::clone(&rec_a))
+        .await
+        .unwrap();
     a.join_federation_execution("A", "region").await.unwrap();
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(x);
-    a.publish_object_class_attributes(class, attrs).await.unwrap();
+    a.publish_object_class_attributes(class, attrs)
+        .await
+        .unwrap();
 
     let pub_region = a.create_region(&[dim_x]).await.unwrap();
-    a.set_range_bounds(pub_region, dim_x, 100, 200).await.unwrap();
+    a.set_range_bounds(pub_region, dim_x, 100, 200)
+        .await
+        .unwrap();
     a.commit_region_modifications(&[pub_region]).await.unwrap();
 
     let reg_req = fedpro::call_request::CallRequest::RegisterObjectInstanceWithRegionsRequest(
@@ -164,13 +178,17 @@ async fn overlapping_regions_route_update() {
 
     let mut values = AttributeHandleValueMap::new();
     values.insert(x, 1i32.to_be_bytes().to_vec());
-    a.update_attribute_values(instance, values, b"overlap").await.unwrap();
+    a.update_attribute_values(instance, values, b"overlap")
+        .await
+        .unwrap();
 
     // Subscriber should receive (regions overlap on X = [100,150]).
-    assert!(wait_for(Duration::from_secs(1), || {
-        rec_b.reflects.load(Ordering::Relaxed) >= 1
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_secs(1), || {
+            rec_b.reflects.load(Ordering::Relaxed) >= 1
+        })
+        .await
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -179,10 +197,15 @@ async fn non_overlapping_regions_filter_update() {
     let url = format!("rti://{addr}");
 
     let rec_b = Arc::new(Rec::default());
-    let b = RtiAmbassador::connect(&url, Arc::clone(&rec_b)).await.unwrap();
+    let b = RtiAmbassador::connect(&url, Arc::clone(&rec_b))
+        .await
+        .unwrap();
     b.create_federation_execution("region2").await.ok();
     b.join_federation_execution("B", "region2").await.unwrap();
-    let class = b.get_object_class_handle("HLAobjectRoot.Mover").await.unwrap();
+    let class = b
+        .get_object_class_handle("HLAobjectRoot.Mover")
+        .await
+        .unwrap();
     let x = b.get_attribute_handle(class, "X").await.unwrap();
     let dim_x = DimensionHandle::new(1);
 
@@ -192,39 +215,46 @@ async fn non_overlapping_regions_filter_update() {
     b.commit_region_modifications(&[sub_region]).await.unwrap();
 
     use hla_fedpro_proto::fedpro;
-    let sub_req = fedpro::call_request::CallRequest::SubscribeObjectClassAttributesWithRegionsRequest(
-        fedpro::SubscribeObjectClassAttributesWithRegionsRequest {
-            object_class: Some(fedpro::ObjectClassHandle {
-                data: class.raw().to_be_bytes().to_vec(),
-            }),
-            active: true,
-            attributes_and_regions: Some(fedpro::AttributeSetRegionSetPairList {
-                attribute_set_region_set_pair: vec![fedpro::AttributeSetRegionSetPair {
-                    attribute_set: Some(fedpro::AttributeHandleSet {
-                        attribute_handle: vec![fedpro::AttributeHandle {
-                            data: x.raw().to_be_bytes().to_vec(),
-                        }],
-                    }),
-                    region_set: Some(fedpro::RegionHandleSet {
-                        region_handle: vec![fedpro::RegionHandle {
-                            data: sub_region.raw().to_be_bytes().to_vec(),
-                        }],
-                    }),
-                }],
-            }),
-        },
-    );
+    let sub_req =
+        fedpro::call_request::CallRequest::SubscribeObjectClassAttributesWithRegionsRequest(
+            fedpro::SubscribeObjectClassAttributesWithRegionsRequest {
+                object_class: Some(fedpro::ObjectClassHandle {
+                    data: class.raw().to_be_bytes().to_vec(),
+                }),
+                active: true,
+                attributes_and_regions: Some(fedpro::AttributeSetRegionSetPairList {
+                    attribute_set_region_set_pair: vec![fedpro::AttributeSetRegionSetPair {
+                        attribute_set: Some(fedpro::AttributeHandleSet {
+                            attribute_handle: vec![fedpro::AttributeHandle {
+                                data: x.raw().to_be_bytes().to_vec(),
+                            }],
+                        }),
+                        region_set: Some(fedpro::RegionHandleSet {
+                            region_handle: vec![fedpro::RegionHandle {
+                                data: sub_region.raw().to_be_bytes().to_vec(),
+                            }],
+                        }),
+                    }],
+                }),
+            },
+        );
     b.raw_call_for_test(sub_req).await.unwrap();
 
     // Publisher region [100, 200] — does NOT overlap [0, 50].
     let rec_a = Arc::new(Rec::default());
-    let a = RtiAmbassador::connect(&url, Arc::clone(&rec_a)).await.unwrap();
+    let a = RtiAmbassador::connect(&url, Arc::clone(&rec_a))
+        .await
+        .unwrap();
     a.join_federation_execution("A", "region2").await.unwrap();
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(x);
-    a.publish_object_class_attributes(class, attrs).await.unwrap();
+    a.publish_object_class_attributes(class, attrs)
+        .await
+        .unwrap();
     let pub_region = a.create_region(&[dim_x]).await.unwrap();
-    a.set_range_bounds(pub_region, dim_x, 100, 200).await.unwrap();
+    a.set_range_bounds(pub_region, dim_x, 100, 200)
+        .await
+        .unwrap();
     a.commit_region_modifications(&[pub_region]).await.unwrap();
 
     let reg_req = fedpro::call_request::CallRequest::RegisterObjectInstanceWithRegionsRequest(
@@ -259,7 +289,9 @@ async fn non_overlapping_regions_filter_update() {
 
     let mut values = AttributeHandleValueMap::new();
     values.insert(x, 1i32.to_be_bytes().to_vec());
-    a.update_attribute_values(instance, values, b"no-overlap").await.unwrap();
+    a.update_attribute_values(instance, values, b"no-overlap")
+        .await
+        .unwrap();
 
     // No overlap → subscriber should NOT receive.
     tokio::time::sleep(Duration::from_millis(300)).await;

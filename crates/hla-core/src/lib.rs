@@ -8,13 +8,13 @@ pub mod handle;
 pub mod time;
 
 pub use error::{
-    DeclarationManagementError, FederationManagementError, ObjectManagementError,
-    RtiError, TimeManagementError,
+    DeclarationManagementError, FederationManagementError, ObjectManagementError, RtiError,
+    TimeManagementError,
 };
 pub use handle::{
-    AttributeHandle, AttributeHandleSet, AttributeHandleValueMap, DimensionHandle,
-    FederateHandle, FederateHandleSet, InteractionClassHandle, ObjectClassHandle,
-    ObjectInstanceHandle, ParameterHandle, ParameterHandleValueMap, RegionHandle,
+    AttributeHandle, AttributeHandleSet, AttributeHandleValueMap, DimensionHandle, FederateHandle,
+    FederateHandleSet, InteractionClassHandle, ObjectClassHandle, ObjectInstanceHandle,
+    ParameterHandle, ParameterHandleValueMap, RegionHandle,
 };
 pub use time::{HlaFloat64Interval, HlaFloat64Time, LogicalTime, LogicalTimeInterval};
 

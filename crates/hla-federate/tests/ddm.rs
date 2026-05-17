@@ -37,7 +37,9 @@ async fn boot() -> SocketAddr {
 async fn region_lifecycle_create_set_commit_get_delete() {
     let addr = boot().await;
     let url = format!("rti://{addr}");
-    let amb = RtiAmbassador::connect(&url, Arc::new(NoopFa)).await.unwrap();
+    let amb = RtiAmbassador::connect(&url, Arc::new(NoopFa))
+        .await
+        .unwrap();
     amb.create_federation_execution("ddm-fed").await.ok();
     amb.join_federation_execution("F", "ddm-fed").await.unwrap();
 
@@ -53,11 +55,19 @@ async fn region_lifecycle_create_set_commit_get_delete() {
     // Modify staged but not yet committed.
     amb.set_range_bounds(region, dim_x, 100, 200).await.unwrap();
     let (lo, hi) = amb.get_range_bounds(region, dim_x).await.unwrap();
-    assert_eq!((lo, hi), (0, u32::MAX), "should still see committed value before commit");
+    assert_eq!(
+        (lo, hi),
+        (0, u32::MAX),
+        "should still see committed value before commit"
+    );
 
     amb.commit_region_modifications(&[region]).await.unwrap();
     let (lo, hi) = amb.get_range_bounds(region, dim_x).await.unwrap();
-    assert_eq!((lo, hi), (100, 200), "after commit, committed reflects staged");
+    assert_eq!(
+        (lo, hi),
+        (100, 200),
+        "after commit, committed reflects staged"
+    );
 
     amb.delete_region(region).await.unwrap();
     // Get on deleted region should fail.
@@ -69,12 +79,19 @@ async fn region_lifecycle_create_set_commit_get_delete() {
 async fn set_range_bounds_rejects_inverted() {
     let addr = boot().await;
     let url = format!("rti://{addr}");
-    let amb = RtiAmbassador::connect(&url, Arc::new(NoopFa)).await.unwrap();
+    let amb = RtiAmbassador::connect(&url, Arc::new(NoopFa))
+        .await
+        .unwrap();
     amb.create_federation_execution("ddm2-fed").await.ok();
-    amb.join_federation_execution("F", "ddm2-fed").await.unwrap();
+    amb.join_federation_execution("F", "ddm2-fed")
+        .await
+        .unwrap();
     let dim = DimensionHandle::new(1);
     let region = amb.create_region(&[dim]).await.unwrap();
-    let err = amb.set_range_bounds(region, dim, 500, 100).await.unwrap_err();
+    let err = amb
+        .set_range_bounds(region, dim, 500, 100)
+        .await
+        .unwrap_err();
     match err {
         hla_federate::CallError::RtiException { name, .. } => {
             assert_eq!(name, "InvalidRangeBound");
@@ -88,13 +105,17 @@ async fn delete_region_owned_by_other_federate_rejected() {
     let addr = boot().await;
     let url = format!("rti://{addr}");
 
-    let a = RtiAmbassador::connect(&url, Arc::new(NoopFa)).await.unwrap();
+    let a = RtiAmbassador::connect(&url, Arc::new(NoopFa))
+        .await
+        .unwrap();
     a.create_federation_execution("ddm3-fed").await.ok();
     a.join_federation_execution("A", "ddm3-fed").await.unwrap();
     let dim = DimensionHandle::new(1);
     let region = a.create_region(&[dim]).await.unwrap();
 
-    let b = RtiAmbassador::connect(&url, Arc::new(NoopFa)).await.unwrap();
+    let b = RtiAmbassador::connect(&url, Arc::new(NoopFa))
+        .await
+        .unwrap();
     b.join_federation_execution("B", "ddm3-fed").await.unwrap();
     let err = b.delete_region(region).await.unwrap_err();
     match err {

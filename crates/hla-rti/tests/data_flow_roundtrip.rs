@@ -79,29 +79,33 @@ fn encode(v: fedpro::call_request::CallRequest) -> Vec<u8> {
 }
 
 fn decode(b: &[u8]) -> fedpro::call_response::CallResponse {
-    fedpro::CallResponse::decode(b).unwrap().call_response.unwrap()
+    fedpro::CallResponse::decode(b)
+        .unwrap()
+        .call_response
+        .unwrap()
 }
 
-async fn open_join_create(
-    addr: SocketAddr,
-    federation: &str,
-) -> (TcpStream, ClientSeqState) {
+async fn open_join_create(addr: SocketAddr, federation: &str) -> (TcpStream, ClientSeqState) {
     let mut sock = TcpStream::connect(addr).await.unwrap();
     let ack = client_open_session(&mut sock).await.unwrap();
     let mut state = ClientSeqState::new(ack.session_id);
-    let create = encode(fedpro::call_request::CallRequest::CreateFederationExecutionRequest(
-        fedpro::CreateFederationExecutionRequest {
-            federation_name: federation.into(),
-            fom_module: None,
-        },
-    ));
+    let create = encode(
+        fedpro::call_request::CallRequest::CreateFederationExecutionRequest(
+            fedpro::CreateFederationExecutionRequest {
+                federation_name: federation.into(),
+                fom_module: None,
+            },
+        ),
+    );
     let _ = send_hla_call(&mut sock, &mut state, create).await.unwrap();
-    let join = encode(fedpro::call_request::CallRequest::JoinFederationExecutionRequest(
-        fedpro::JoinFederationExecutionRequest {
-            federate_type: "T".into(),
-            federation_name: federation.into(),
-        },
-    ));
+    let join = encode(
+        fedpro::call_request::CallRequest::JoinFederationExecutionRequest(
+            fedpro::JoinFederationExecutionRequest {
+                federate_type: "T".into(),
+                federation_name: federation.into(),
+            },
+        ),
+    );
     let _ = send_hla_call(&mut sock, &mut state, join).await.unwrap();
     (sock, state)
 }
@@ -110,22 +114,26 @@ async fn lookup_drink_cups(
     sock: &mut TcpStream,
     state: &mut ClientSeqState,
 ) -> (fedpro::ObjectClassHandle, fedpro::AttributeHandle) {
-    let drink_req = encode(fedpro::call_request::CallRequest::GetObjectClassHandleRequest(
-        fedpro::GetObjectClassHandleRequest {
-            object_class_name: "HLAobjectRoot.Food.Drink".into(),
-        },
-    ));
+    let drink_req = encode(
+        fedpro::call_request::CallRequest::GetObjectClassHandleRequest(
+            fedpro::GetObjectClassHandleRequest {
+                object_class_name: "HLAobjectRoot.Food.Drink".into(),
+            },
+        ),
+    );
     let resp = send_hla_call(sock, state, drink_req).await.unwrap();
     let drink = match decode(&resp) {
         fedpro::call_response::CallResponse::GetObjectClassHandleResponse(r) => r.result.unwrap(),
         _ => panic!(),
     };
-    let cups_req = encode(fedpro::call_request::CallRequest::GetAttributeHandleRequest(
-        fedpro::GetAttributeHandleRequest {
-            object_class: Some(drink.clone()),
-            attribute_name: "NumberCups".into(),
-        },
-    ));
+    let cups_req = encode(
+        fedpro::call_request::CallRequest::GetAttributeHandleRequest(
+            fedpro::GetAttributeHandleRequest {
+                object_class: Some(drink.clone()),
+                attribute_name: "NumberCups".into(),
+            },
+        ),
+    );
     let resp = send_hla_call(sock, state, cups_req).await.unwrap();
     let cups = match decode(&resp) {
         fedpro::call_response::CallResponse::GetAttributeHandleResponse(r) => r.result.unwrap(),
@@ -152,12 +160,14 @@ async fn lookup_food_served(
         }
         _ => panic!(),
     };
-    let param_req = encode(fedpro::call_request::CallRequest::GetParameterHandleRequest(
-        fedpro::GetParameterHandleRequest {
-            interaction_class: Some(ix.clone()),
-            parameter_name: "FoodType".into(),
-        },
-    ));
+    let param_req = encode(
+        fedpro::call_request::CallRequest::GetParameterHandleRequest(
+            fedpro::GetParameterHandleRequest {
+                interaction_class: Some(ix.clone()),
+                parameter_name: "FoodType".into(),
+            },
+        ),
+    );
     let resp = send_hla_call(sock, state, param_req).await.unwrap();
     let param = match decode(&resp) {
         fedpro::call_response::CallResponse::GetParameterHandleResponse(r) => r.result.unwrap(),
@@ -203,7 +213,10 @@ async fn publisher_to_subscriber_object_update() {
     // Publisher A connects + joins, publishes, registers, updates.
     let (mut a_sock, mut a_state) = open_join_create(addr, "feda").await;
     let (drink_a, cups_a) = lookup_drink_cups(&mut a_sock, &mut a_state).await;
-    assert_eq!(drink, drink_a, "FOM handle assignment should be deterministic");
+    assert_eq!(
+        drink, drink_a,
+        "FOM handle assignment should be deterministic"
+    );
     assert_eq!(cups, cups_a);
 
     let pub_req = encode(
@@ -216,32 +229,40 @@ async fn publisher_to_subscriber_object_update() {
             },
         ),
     );
-    let _ = send_hla_call(&mut a_sock, &mut a_state, pub_req).await.unwrap();
+    let _ = send_hla_call(&mut a_sock, &mut a_state, pub_req)
+        .await
+        .unwrap();
 
-    let reg = encode(fedpro::call_request::CallRequest::RegisterObjectInstanceRequest(
-        fedpro::RegisterObjectInstanceRequest {
-            object_class: Some(drink_a.clone()),
-        },
-    ));
+    let reg = encode(
+        fedpro::call_request::CallRequest::RegisterObjectInstanceRequest(
+            fedpro::RegisterObjectInstanceRequest {
+                object_class: Some(drink_a.clone()),
+            },
+        ),
+    );
     let resp = send_hla_call(&mut a_sock, &mut a_state, reg).await.unwrap();
     let instance = match decode(&resp) {
         fedpro::call_response::CallResponse::RegisterObjectInstanceResponse(r) => r.result.unwrap(),
         other => panic!("expected RegisterObjectInstanceResponse, got {other:?}"),
     };
 
-    let update = encode(fedpro::call_request::CallRequest::UpdateAttributeValuesRequest(
-        fedpro::UpdateAttributeValuesRequest {
-            object_instance: Some(instance.clone()),
-            attribute_values: Some(fedpro::AttributeHandleValueMap {
-                attribute_handle_value: vec![fedpro::AttributeHandleValue {
-                    attribute_handle: Some(cups_a),
-                    value: 42i32.to_be_bytes().to_vec(),
-                }],
-            }),
-            user_supplied_tag: b"first-pour".to_vec(),
-        },
-    ));
-    let resp = send_hla_call(&mut a_sock, &mut a_state, update).await.unwrap();
+    let update = encode(
+        fedpro::call_request::CallRequest::UpdateAttributeValuesRequest(
+            fedpro::UpdateAttributeValuesRequest {
+                object_instance: Some(instance.clone()),
+                attribute_values: Some(fedpro::AttributeHandleValueMap {
+                    attribute_handle_value: vec![fedpro::AttributeHandleValue {
+                        attribute_handle: Some(cups_a),
+                        value: 42i32.to_be_bytes().to_vec(),
+                    }],
+                }),
+                user_supplied_tag: b"first-pour".to_vec(),
+            },
+        ),
+    );
+    let resp = send_hla_call(&mut a_sock, &mut a_state, update)
+        .await
+        .unwrap();
     assert!(matches!(
         decode(&resp),
         fedpro::call_response::CallResponse::UpdateAttributeValuesResponse(_)
@@ -280,21 +301,27 @@ async fn publisher_to_subscriber_interaction() {
 
     let (mut b_sock, mut b_state) = open_join_create(addr, "fedi").await;
     let (food_served, food_type) = lookup_food_served(&mut b_sock, &mut b_state).await;
-    let sub = encode(fedpro::call_request::CallRequest::SubscribeInteractionClassRequest(
-        fedpro::SubscribeInteractionClassRequest {
-            interaction_class: Some(food_served.clone()),
-        },
-    ));
+    let sub = encode(
+        fedpro::call_request::CallRequest::SubscribeInteractionClassRequest(
+            fedpro::SubscribeInteractionClassRequest {
+                interaction_class: Some(food_served.clone()),
+            },
+        ),
+    );
     let _ = send_hla_call(&mut b_sock, &mut b_state, sub).await.unwrap();
 
     let (mut a_sock, mut a_state) = open_join_create(addr, "fedi").await;
     let (food_served_a, food_type_a) = lookup_food_served(&mut a_sock, &mut a_state).await;
-    let pub_req = encode(fedpro::call_request::CallRequest::PublishInteractionClassRequest(
-        fedpro::PublishInteractionClassRequest {
-            interaction_class: Some(food_served_a.clone()),
-        },
-    ));
-    let _ = send_hla_call(&mut a_sock, &mut a_state, pub_req).await.unwrap();
+    let pub_req = encode(
+        fedpro::call_request::CallRequest::PublishInteractionClassRequest(
+            fedpro::PublishInteractionClassRequest {
+                interaction_class: Some(food_served_a.clone()),
+            },
+        ),
+    );
+    let _ = send_hla_call(&mut a_sock, &mut a_state, pub_req)
+        .await
+        .unwrap();
 
     let send = encode(fedpro::call_request::CallRequest::SendInteractionRequest(
         fedpro::SendInteractionRequest {
@@ -308,7 +335,9 @@ async fn publisher_to_subscriber_interaction() {
             user_supplied_tag: b"order-1".to_vec(),
         },
     ));
-    let resp = send_hla_call(&mut a_sock, &mut a_state, send).await.unwrap();
+    let resp = send_hla_call(&mut a_sock, &mut a_state, send)
+        .await
+        .unwrap();
     assert!(matches!(
         decode(&resp),
         fedpro::call_response::CallResponse::SendInteractionResponse(_)
@@ -319,18 +348,16 @@ async fn publisher_to_subscriber_interaction() {
         fedpro::callback_request::CallbackRequest::ReceiveInteraction(r) => r,
         other => panic!("expected ReceiveInteraction, got {other:?}"),
     };
-    assert_eq!(
-        receive.interaction_class.unwrap().data,
-        food_served.data
-    );
+    assert_eq!(receive.interaction_class.unwrap().data, food_served.data);
     let params = receive.parameter_values.unwrap();
     assert_eq!(params.parameter_handle_value.len(), 1);
     assert_eq!(params.parameter_handle_value[0].value, b"ramen");
-    assert_eq!(params.parameter_handle_value[0]
-        .parameter_handle
-        .as_ref()
-        .unwrap()
-        .data,
+    assert_eq!(
+        params.parameter_handle_value[0]
+            .parameter_handle
+            .as_ref()
+            .unwrap()
+            .data,
         food_type.data
     );
     assert_eq!(receive.user_supplied_tag, b"order-1");
@@ -345,14 +372,16 @@ async fn delete_object_instance_fires_remove_callback() {
     let _ = send_hla_call(
         &mut b_sock,
         &mut b_state,
-        encode(fedpro::call_request::CallRequest::SubscribeObjectClassAttributesRequest(
-            fedpro::SubscribeObjectClassAttributesRequest {
-                object_class: Some(drink.clone()),
-                attributes: Some(fedpro::AttributeHandleSet {
-                    attribute_handle: vec![cups.clone()],
-                }),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::SubscribeObjectClassAttributesRequest(
+                fedpro::SubscribeObjectClassAttributesRequest {
+                    object_class: Some(drink.clone()),
+                    attributes: Some(fedpro::AttributeHandleSet {
+                        attribute_handle: vec![cups.clone()],
+                    }),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -362,25 +391,29 @@ async fn delete_object_instance_fires_remove_callback() {
     let _ = send_hla_call(
         &mut a_sock,
         &mut a_state,
-        encode(fedpro::call_request::CallRequest::PublishObjectClassAttributesRequest(
-            fedpro::PublishObjectClassAttributesRequest {
-                object_class: Some(drink_a.clone()),
-                attributes: Some(fedpro::AttributeHandleSet {
-                    attribute_handle: vec![cups_a],
-                }),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::PublishObjectClassAttributesRequest(
+                fedpro::PublishObjectClassAttributesRequest {
+                    object_class: Some(drink_a.clone()),
+                    attributes: Some(fedpro::AttributeHandleSet {
+                        attribute_handle: vec![cups_a],
+                    }),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
     let resp = send_hla_call(
         &mut a_sock,
         &mut a_state,
-        encode(fedpro::call_request::CallRequest::RegisterObjectInstanceRequest(
-            fedpro::RegisterObjectInstanceRequest {
-                object_class: Some(drink_a),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::RegisterObjectInstanceRequest(
+                fedpro::RegisterObjectInstanceRequest {
+                    object_class: Some(drink_a),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -396,12 +429,14 @@ async fn delete_object_instance_fires_remove_callback() {
     let _ = send_hla_call(
         &mut a_sock,
         &mut a_state,
-        encode(fedpro::call_request::CallRequest::DeleteObjectInstanceRequest(
-            fedpro::DeleteObjectInstanceRequest {
-                object_instance: Some(instance.clone()),
-                user_supplied_tag: b"closing-time".to_vec(),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::DeleteObjectInstanceRequest(
+                fedpro::DeleteObjectInstanceRequest {
+                    object_instance: Some(instance.clone()),
+                    user_supplied_tag: b"closing-time".to_vec(),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -426,39 +461,45 @@ async fn producer_does_not_receive_own_callback() {
     let _ = send_hla_call(
         &mut a_sock,
         &mut a_state,
-        encode(fedpro::call_request::CallRequest::SubscribeObjectClassAttributesRequest(
-            fedpro::SubscribeObjectClassAttributesRequest {
-                object_class: Some(drink.clone()),
-                attributes: Some(fedpro::AttributeHandleSet {
-                    attribute_handle: vec![cups.clone()],
-                }),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::SubscribeObjectClassAttributesRequest(
+                fedpro::SubscribeObjectClassAttributesRequest {
+                    object_class: Some(drink.clone()),
+                    attributes: Some(fedpro::AttributeHandleSet {
+                        attribute_handle: vec![cups.clone()],
+                    }),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
     let _ = send_hla_call(
         &mut a_sock,
         &mut a_state,
-        encode(fedpro::call_request::CallRequest::PublishObjectClassAttributesRequest(
-            fedpro::PublishObjectClassAttributesRequest {
-                object_class: Some(drink.clone()),
-                attributes: Some(fedpro::AttributeHandleSet {
-                    attribute_handle: vec![cups.clone()],
-                }),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::PublishObjectClassAttributesRequest(
+                fedpro::PublishObjectClassAttributesRequest {
+                    object_class: Some(drink.clone()),
+                    attributes: Some(fedpro::AttributeHandleSet {
+                        attribute_handle: vec![cups.clone()],
+                    }),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
     let resp = send_hla_call(
         &mut a_sock,
         &mut a_state,
-        encode(fedpro::call_request::CallRequest::RegisterObjectInstanceRequest(
-            fedpro::RegisterObjectInstanceRequest {
-                object_class: Some(drink),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::RegisterObjectInstanceRequest(
+                fedpro::RegisterObjectInstanceRequest {
+                    object_class: Some(drink),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();
@@ -469,18 +510,20 @@ async fn producer_does_not_receive_own_callback() {
     let _ = send_hla_call(
         &mut a_sock,
         &mut a_state,
-        encode(fedpro::call_request::CallRequest::UpdateAttributeValuesRequest(
-            fedpro::UpdateAttributeValuesRequest {
-                object_instance: Some(instance),
-                attribute_values: Some(fedpro::AttributeHandleValueMap {
-                    attribute_handle_value: vec![fedpro::AttributeHandleValue {
-                        attribute_handle: Some(cups),
-                        value: 1i32.to_be_bytes().to_vec(),
-                    }],
-                }),
-                user_supplied_tag: b"self-test".to_vec(),
-            },
-        )),
+        encode(
+            fedpro::call_request::CallRequest::UpdateAttributeValuesRequest(
+                fedpro::UpdateAttributeValuesRequest {
+                    object_instance: Some(instance),
+                    attribute_values: Some(fedpro::AttributeHandleValueMap {
+                        attribute_handle_value: vec![fedpro::AttributeHandleValue {
+                            attribute_handle: Some(cups),
+                            value: 1i32.to_be_bytes().to_vec(),
+                        }],
+                    }),
+                    user_supplied_tag: b"self-test".to_vec(),
+                },
+            ),
+        ),
     )
     .await
     .unwrap();

@@ -136,6 +136,10 @@ async fn wait_for<F: Fn() -> bool>(timeout: Duration, predicate: F) -> bool {
     predicate()
 }
 
+// `parking_lot::Mutex` guards are taken and explicitly `drop`-ed before
+// every `.await` in this test. Clippy's `await_holding_lock` heuristic
+// can't see the explicit drop, so allow at the fn level.
+#[allow(clippy::await_holding_lock)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn full_pub_sub_via_federate_library() {
     let addr = boot_rti().await;
@@ -156,7 +160,10 @@ async fn full_pub_sub_via_federate_library() {
         .get_object_class_handle("HLAobjectRoot.Food.Drink")
         .await
         .unwrap();
-    let cups_attr = sub.get_attribute_handle(drink_class, "NumberCups").await.unwrap();
+    let cups_attr = sub
+        .get_attribute_handle(drink_class, "NumberCups")
+        .await
+        .unwrap();
     let mut attrs = AttributeHandleSet::new();
     attrs.insert(cups_attr);
     sub.subscribe_object_class_attributes(drink_class, attrs.clone())
@@ -167,7 +174,10 @@ async fn full_pub_sub_via_federate_library() {
         .get_interaction_class_handle("HLAinteractionRoot.FoodServed")
         .await
         .unwrap();
-    let food_type_param = sub.get_parameter_handle(food_served, "FoodType").await.unwrap();
+    let food_type_param = sub
+        .get_parameter_handle(food_served, "FoodType")
+        .await
+        .unwrap();
     sub.subscribe_interaction_class(food_served).await.unwrap();
 
     // ---- Publisher ----
@@ -185,10 +195,16 @@ async fn full_pub_sub_via_federate_library() {
         .publish_object_class_attributes(drink_class, attrs)
         .await
         .unwrap();
-    publisher.publish_interaction_class(food_served).await.unwrap();
+    publisher
+        .publish_interaction_class(food_served)
+        .await
+        .unwrap();
 
     // Register + update.
-    let instance = publisher.register_object_instance(drink_class).await.unwrap();
+    let instance = publisher
+        .register_object_instance(drink_class)
+        .await
+        .unwrap();
     let mut values = AttributeHandleValueMap::new();
     values.insert(cups_attr, 42i32.to_be_bytes().to_vec());
     publisher
@@ -250,7 +266,7 @@ async fn full_pub_sub_via_federate_library() {
         .await
         .unwrap();
     let removed = wait_for(Duration::from_secs(1), || {
-        recorder.removes.lock().len() >= 1
+        !recorder.removes.lock().is_empty()
     })
     .await;
     assert!(removed, "remove callback never arrived");
@@ -297,12 +313,16 @@ async fn time_management_via_federate_library() {
         .await
         .unwrap();
     reg.create_federation_execution("tm-e2e").await.ok();
-    reg.join_federation_execution("Regulator", "tm-e2e").await.unwrap();
+    reg.join_federation_execution("Regulator", "tm-e2e")
+        .await
+        .unwrap();
     reg.enable_time_regulation(1.0).await.unwrap();
-    assert!(wait_for(Duration::from_millis(500), || {
-        r1.regulation_enabled_at.lock().is_some()
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_millis(500), || {
+            r1.regulation_enabled_at.lock().is_some()
+        })
+        .await
+    );
     assert_eq!(*r1.regulation_enabled_at.lock(), Some(0.0));
 
     let r2 = Arc::new(TimeRec::default());
@@ -310,19 +330,25 @@ async fn time_management_via_federate_library() {
         .await
         .unwrap();
     con.create_federation_execution("tm-e2e").await.ok();
-    con.join_federation_execution("Constrained", "tm-e2e").await.unwrap();
+    con.join_federation_execution("Constrained", "tm-e2e")
+        .await
+        .unwrap();
     con.enable_time_constrained().await.unwrap();
-    assert!(wait_for(Duration::from_millis(500), || {
-        r2.constrained_enabled_at.lock().is_some()
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_millis(500), || {
+            r2.constrained_enabled_at.lock().is_some()
+        })
+        .await
+    );
 
     // Constrained TAR to 0.5 — LBTS=1.0 so should grant immediately.
     con.time_advance_request(0.5).await.unwrap();
-    assert!(wait_for(Duration::from_millis(500), || {
-        !r2.grants.lock().is_empty()
-    })
-    .await);
+    assert!(
+        wait_for(Duration::from_millis(500), || {
+            !r2.grants.lock().is_empty()
+        })
+        .await
+    );
     assert_eq!(r2.grants.lock()[0], 0.5);
 
     reg.disconnect().await.unwrap();

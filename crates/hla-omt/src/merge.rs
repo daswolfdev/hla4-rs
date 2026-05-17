@@ -2,23 +2,23 @@
 //!
 //! MVP semantics: union-by-FQN. When two modules define the same object or
 //! interaction class:
-//!   * attribute / parameter lists are unioned by name
-//!   * conflicting field values on the same attribute name → `MergeConflict`
+//!
+//! * attribute / parameter lists are unioned by name
+//! * conflicting field values on the same attribute name → `MergeConflict`
+//!
 //! Handles are assigned in deterministic order:
-//!   * Object classes: depth-first walk of the merged inheritance tree
-//!     rooted at `HLAobjectRoot`, in insertion order at each level
-//!   * Attributes: per-class, in attribute insertion order
-//!   * Interaction classes / parameters: symmetric
+//!
+//! * Object classes: depth-first walk of the merged inheritance tree
+//!   rooted at `HLAobjectRoot`, in insertion order at each level
+//! * Attributes: per-class, in attribute insertion order
+//! * Interaction classes / parameters: symmetric
 
 use std::collections::{BTreeMap, HashMap};
 
-use hla_core::{
-    AttributeHandle, InteractionClassHandle, ObjectClassHandle, ParameterHandle,
-};
+use hla_core::{AttributeHandle, InteractionClassHandle, ObjectClassHandle, ParameterHandle};
 
 use crate::{
-    AttributeDef, FomError, FomModule, InteractionClassDef, MergedFom, ObjectClassDef,
-    ParameterDef,
+    AttributeDef, FomError, FomModule, InteractionClassDef, MergedFom, ObjectClassDef, ParameterDef,
 };
 
 pub(crate) fn merge_modules(modules: Vec<FomModule>) -> Result<MergedFom, FomError> {
@@ -40,8 +40,7 @@ pub(crate) fn merge_modules(modules: Vec<FomModule>) -> Result<MergedFom, FomErr
     // ---- assign handles for object classes (depth-first from roots) ----
     let mut object_classes: HashMap<ObjectClassHandle, ObjectClassDef> = HashMap::new();
     let mut object_class_table: HashMap<String, ObjectClassHandle> = HashMap::new();
-    let mut attribute_table: HashMap<(ObjectClassHandle, String), AttributeHandle> =
-        HashMap::new();
+    let mut attribute_table: HashMap<(ObjectClassHandle, String), AttributeHandle> = HashMap::new();
 
     let mut next_class: u32 = 1;
     let mut next_attribute: u32 = 1;
